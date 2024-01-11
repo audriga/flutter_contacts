@@ -55,9 +55,10 @@ class FlutterContacts {
   /// labels on Android and groups on iOS).
   ///
   /// If [withAccounts] is true, it also returns the account information. On
-  /// Android this is the raw account, and there can be several accounts per
-  /// unified contact (for example one for Gmail, one for Skype and one for
-  /// WhatsApp). On iOS it is called container, and there can be only one
+  /// Android this is the account associated with a raw contact,
+  /// and there can be several raw contacts per unified contact (for example
+  /// one for Gmail, one for Skype and one for  WhatsApp).
+  /// On iOS it is called container, and there can be only one
   /// container per contact.
   ///
   /// If [sorted] is true, the contacts are returned sorted by their

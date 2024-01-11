@@ -27,6 +27,7 @@ import android.provider.ContactsContract.Contacts
 import android.provider.ContactsContract.Data
 import android.provider.ContactsContract.Groups
 import android.provider.ContactsContract.RawContacts
+import co.quis.flutter_contacts.properties.Account
 import java.io.FileNotFoundException
 import java.io.InputStream
 import java.io.OutputStream
@@ -408,6 +409,238 @@ class FlutterContacts {
             return contacts.map { it.toMap() }
         }
 
+        fun queryDeleted(
+            resolver: ContentResolver,
+            account: Account
+
+        ) :  List<Map<String, Any?>> {
+            // List of all contacts.
+            var contacts = mutableListOf<Contact>()
+            resolver.query(RawContacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
+                .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
+                .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
+                .build(), null,
+                RawContacts.DELETED, null, null)?.use { cursor ->
+//                while (cursor.moveToNext())
+//                    contacts +=  AndroidContactFactory<T1>.fromProvider(this, cursor.toContentValues())
+
+                    // todo: copy-paste from select method. Refactor in heper method
+
+                // Maps contact ID to its index in `contacts`.
+                var index = mutableMapOf<String, Int>()
+
+                fun getString(col: String): String = cursor.getString(cursor.getColumnIndex(col)) ?: ""
+                fun getInt(col: String): Int = cursor.getInt(cursor.getColumnIndex(col)) ?: 0
+                fun getBool(col: String): Boolean = getInt(col) == 1
+
+                while (cursor.moveToNext()) {
+                    // ID and display name.
+                    val id = getString(Data.RAW_CONTACT_ID)
+                    if (id !in index) {
+                        var contact = Contact(
+                            /*id=*/id,
+                            /*displayName=*/getString(Contacts.DISPLAY_NAME_PRIMARY),
+                            isStarred = getBool(Contacts.STARRED)
+                        )
+
+                        // Fetch high-resolution photo if requested.
+                        val contactUri: Uri =
+                            ContentUris.withAppendedId(Contacts.CONTENT_URI, id.toLong())
+                        val displayPhotoUri: Uri =
+                            Uri.withAppendedPath(contactUri, Contacts.Photo.DISPLAY_PHOTO)
+                        try {
+                            var fis: InputStream? = resolver.openInputStream(displayPhotoUri)
+                            contact.photo = fis?.readBytes()
+                        } catch (e: FileNotFoundException) {
+                            // This happens when no high-resolution photo exists, and is
+                            // a common situation.
+                        }
+
+                        index[id] = contacts.size
+                        contacts.add(contact)
+                    }
+                    var contact: Contact = contacts[index[id]!!]
+
+                    // The MIME type of the data in current row (e.g. phone, email, etc).
+                    val mimetype = getString(Data.MIMETYPE)
+
+                    // Thumbnails.
+                    if (mimetype == Photo.CONTENT_ITEM_TYPE) {
+                        contact.thumbnail = cursor.getBlob(cursor.getColumnIndex(Photo.PHOTO))
+                    }
+
+                    // All properties (phones, emails, etc).
+                    // Raw IDs are IDs of the contact in different accounts (e.g. the
+                    // same contact might have Google, WhatsApp and Skype accounts, each
+                    // with its own raw ID).
+                    val rawId = getString(Data.RAW_CONTACT_ID)
+                    val accountType = getString(RawContacts.ACCOUNT_TYPE)
+                    val accountName = getString(RawContacts.ACCOUNT_NAME)
+                    var accountSeen = false
+                    for (account in contact.accounts) {
+                        if (account.rawId == rawId) {
+                            accountSeen = true
+                            account.mimetypes =
+                                (account.mimetypes + mimetype).toSortedSet().toList()
+                        }
+                    }
+                    if (!accountSeen) {
+                        val account = PAccount(
+                            rawId,
+                            accountType,
+                            accountName,
+                            listOf(mimetype)
+                        )
+                        contact.accounts += account
+                    }
+
+                    when (mimetype) {
+                        StructuredName.CONTENT_ITEM_TYPE -> {
+                            // Save nickname in case it was there already.
+                            val nickname: String = contact.name.nickname
+                            contact.name = PName(
+                                getString(StructuredName.GIVEN_NAME),
+                                getString(StructuredName.FAMILY_NAME),
+                                getString(StructuredName.MIDDLE_NAME),
+                                getString(StructuredName.PREFIX),
+                                getString(StructuredName.SUFFIX),
+                                nickname,
+                                getString(StructuredName.PHONETIC_GIVEN_NAME),
+                                getString(StructuredName.PHONETIC_FAMILY_NAME),
+                                getString(StructuredName.PHONETIC_MIDDLE_NAME)
+                            )
+                        }
+                        Nickname.CONTENT_ITEM_TYPE ->
+                            contact.name.nickname = getString(Nickname.NAME)
+                        Phone.CONTENT_ITEM_TYPE -> {
+                            val label: String = getPhoneLabel(cursor)
+                            val customLabel: String =
+                                if (label == "custom") getPhoneCustomLabel(cursor) else ""
+                            val phone = PPhone(
+                                getString(Phone.NUMBER),
+                                getString(Phone.NORMALIZED_NUMBER),
+                                label,
+                                customLabel,
+                                getInt(Phone.IS_PRIMARY) == 1
+                            )
+                            contact.phones += phone
+                        }
+                        Email.CONTENT_ITEM_TYPE -> {
+                            val label: String = getEmailLabel(cursor)
+                            val customLabel: String =
+                                if (label == "custom") getEmailCustomLabel(cursor) else ""
+                            val email = PEmail(
+                                getString(Email.ADDRESS),
+                                label,
+                                customLabel,
+                                getInt(Email.IS_PRIMARY) == 1
+                            )
+                            contact.emails += email
+                        }
+                        StructuredPostal.CONTENT_ITEM_TYPE -> {
+                            val label: String = getAddressLabel(cursor)
+                            val customLabel: String =
+                                if (label == "custom") getAddressCustomLabel(cursor) else ""
+                            val address = PAddress(
+                                getString(StructuredPostal.FORMATTED_ADDRESS),
+                                label,
+                                customLabel,
+                                getString(StructuredPostal.STREET),
+                                getString(StructuredPostal.POBOX),
+                                getString(StructuredPostal.NEIGHBORHOOD),
+                                getString(StructuredPostal.CITY),
+                                getString(StructuredPostal.REGION),
+                                getString(StructuredPostal.POSTCODE),
+                                getString(StructuredPostal.COUNTRY),
+                                "",
+                                "",
+                                ""
+                            )
+                            contact.addresses += address
+                        }
+                        Organization.CONTENT_ITEM_TYPE -> {
+                            val organization = POrganization(
+                                getString(Organization.COMPANY),
+                                getString(Organization.TITLE),
+                                getString(Organization.DEPARTMENT),
+                                getString(Organization.JOB_DESCRIPTION),
+                                getString(Organization.SYMBOL),
+                                getString(Organization.PHONETIC_NAME),
+                                getString(Organization.OFFICE_LOCATION)
+                            )
+                            contact.organizations += organization
+                        }
+                        Website.CONTENT_ITEM_TYPE -> {
+                            val label: String = getWebsiteLabel(cursor)
+                            val customLabel: String =
+                                if (label == "custom") getWebsiteCustomLabel(cursor) else ""
+                            val website = PWebsite(
+                                getString(Website.URL),
+                                label,
+                                customLabel
+                            )
+                            contact.websites += website
+                        }
+                        Im.CONTENT_ITEM_TYPE -> {
+                            val label: String = getSocialMediaLabel(cursor)
+                            val customLabel: String =
+                                if (label == "custom") getSocialMediaCustomLabel(cursor) else ""
+                            val socialMedia = PSocialMedia(
+                                getString(Im.DATA),
+                                label,
+                                customLabel
+                            )
+                            contact.socialMedias += socialMedia
+                        }
+                        Event.CONTENT_ITEM_TYPE -> {
+                            val date = getString(Event.START_DATE)
+                            var year: Int? = null
+                            var month: Int? = null
+                            var day: Int? = null
+                            if (YYYY_MM_DD matches date) {
+                                year = date.substring(0, 4).toInt()
+                                month = date.substring(5, 7).toInt()
+                                day = date.substring(8, 10).toInt()
+                            } else if (MM_DD matches date) {
+                                month = date.substring(2, 4).toInt()
+                                day = date.substring(5, 7).toInt()
+                            }
+                            if (month != null && day != null) {
+                                val label: String = getEventLabel(cursor)
+                                val customLabel: String =
+                                    if (label == "custom") getEventCustomLabel(cursor) else ""
+                                val event = PEvent(
+                                    year,
+                                    month!!,
+                                    day!!,
+                                    label,
+                                    customLabel
+                                )
+                                contact.events += event
+                            }
+                        }
+                        Note.CONTENT_ITEM_TYPE -> {
+                            val note: String = getString(Note.NOTE)
+                            // It seems that every contact has an empty note by default;
+                            // filter empty notes to avoid confusion.
+                            if (!note.isEmpty()) {
+                                val note = PNote(getString(Note.NOTE))
+                                contact.notes += note
+                            }
+                        }
+                        GroupMembership.CONTENT_ITEM_TYPE -> {
+                        }
+                    }
+                }
+
+                cursor.close()
+
+
+            }
+            return contacts.map { it.toMap() }
+        }
+
         fun insert(
             resolver: ContentResolver,
             contactMap: Map<String, Any?>
@@ -548,7 +781,7 @@ class FlutterContacts {
                 )
             }
 
-            buildOpsForContact(contact, ops, rawContactId)
+            buildOpsForContact(contact, ops, rawContactId) //todo this is the rawId of the first contact
             if (contact.photo != null) {
                 buildOpsForPhoto(resolver, contact.photo!!, ops, rawContactId.toLong())
             }
@@ -587,6 +820,119 @@ class FlutterContacts {
             return updatedContacts[0]
         }
 
+        fun updateRaw(
+            resolver: ContentResolver,
+            contactMap: Map<String, Any?>,
+            withGroups: Boolean
+        ): Map<String, Any?>? {
+            fun ContentValues.putStringOrNull(key: String, value: String) {
+                if (value.isNotEmpty()) put(key, value) else putNull(key)
+            }
+            val ops = mutableListOf<ContentProviderOperation>()
+
+            val contact = Contact.fromMap(contactMap)
+
+            val rawContactId = contact.id
+            assert(rawContactId == contact.accounts.first().rawId) { "Id should be RawId" }
+
+            // From https://github.com/bitfireAT/vcard4android/blob/main/lib/src/main/java/at/bitfire/vcard4android/AndroidContact.kt
+
+            // Delete known data rows before adding the new ones.
+            // - We don't delete group memberships because they're managed separately.
+            // - We'll only delete rows we have inserted so that unknown rows like
+            //   vnd.android.cursor.item/important_people (= contact is in Samsung "edge panel") remain untouched.
+
+            /// TODO Cursor here
+            ///  Was weiter unten ist is not copy-paste von nicht-raw funktion.
+
+
+            ops.add(
+                ContentProviderOperation.newDelete(Data.CONTENT_URI)
+                    .withSelection(
+                        "${Data.RAW_CONTACT_ID}=? and ${Data.MIMETYPE} in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        arrayOf(
+                            rawContactId,
+                            StructuredName.CONTENT_ITEM_TYPE,
+                            Nickname.CONTENT_ITEM_TYPE,
+                            Phone.CONTENT_ITEM_TYPE,
+                            Email.CONTENT_ITEM_TYPE,
+                            StructuredPostal.CONTENT_ITEM_TYPE,
+                            Organization.CONTENT_ITEM_TYPE,
+                            Website.CONTENT_ITEM_TYPE,
+                            Im.CONTENT_ITEM_TYPE,
+                            Event.CONTENT_ITEM_TYPE,
+                            Note.CONTENT_ITEM_TYPE
+                        )
+                    )
+                    .build()
+            )
+            if (contact.photo == null && contact.thumbnail == null) {
+                ops.add(
+                    ContentProviderOperation.newDelete(Data.CONTENT_URI)
+                        .withSelection(
+                            "${Data.RAW_CONTACT_ID}=? and ${Data.MIMETYPE}=?",
+                            arrayOf(
+                                rawContactId,
+                                Photo.CONTENT_ITEM_TYPE
+                            )
+                        )
+                        .build()
+                )
+            }
+            if (withGroups) {
+                ops.add(
+                    ContentProviderOperation.newDelete(Data.CONTENT_URI)
+                        .withSelection(
+                            "${Data.RAW_CONTACT_ID}=? and ${Data.MIMETYPE}=?",
+                            arrayOf(
+                                rawContactId,
+                                GroupMembership.CONTENT_ITEM_TYPE
+                            )
+                        )
+                        .build()
+                )
+            }
+
+            //todo Is deleting and reinserting the photo on every change really the only way of doing this
+            buildOpsForContact(contact, ops, rawContactId)
+            if (contact.photo != null) {
+                buildOpsForPhoto(resolver, contact.photo!!, ops, rawContactId.toLong())
+            }
+
+            // Save.
+            resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
+
+            // Update starred status.
+            val contentValues = ContentValues()
+            contentValues.put(Contacts.STARRED, if (contact.isStarred) 1 else 0)
+            resolver.update(
+                Contacts.CONTENT_URI,
+                contentValues,
+                Data.RAW_CONTACT_ID + "=?", // todo this is wrong. It should either be Data.RAW_CONTACT_ID to just update the raw contact's starred status or `contact_id` to update all raw contacts
+                /*selectionArgs=*/arrayOf(rawContactId)
+            )
+
+            // Load contacts with that raw ID, which will give us the full contact as it
+            // was saved.
+            val updatedContacts: List<Map<String, Any?>> = select(
+                resolver,
+                rawContactId,
+                withProperties = true,
+                withThumbnail = true,
+                withPhoto = true,
+                withGroups = false, // slower, usually not needed
+                withAccounts = true,
+                returnUnifiedContacts = false,
+                includeNonVisible = true,
+                idIsRawContactId = true
+            )
+
+            if (updatedContacts.isEmpty()) {
+                return null
+            }
+            return updatedContacts[0]
+        }
+
         fun delete(resolver: ContentResolver, contactIds: List<String>) {
             val ops = mutableListOf<ContentProviderOperation>()
 
@@ -594,6 +940,19 @@ class FlutterContacts {
                 ops.add(
                     ContentProviderOperation.newDelete(RawContacts.CONTENT_URI)
                         .withSelection("${RawContacts.CONTACT_ID}=?", arrayOf(contactId))
+                        .build()
+                )
+            }
+
+            resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
+        }
+        fun deleteRaw(resolver: ContentResolver, rawContactIds: List<String>) {
+            val ops = mutableListOf<ContentProviderOperation>()
+
+            for (rawContactId in rawContactIds) {
+                ops.add(
+                    ContentProviderOperation.newDelete(RawContacts.CONTENT_URI)
+                        .withSelection("${Data.RAW_CONTACT_ID}=?", arrayOf(rawContactId))
                         .build()
                 )
             }
@@ -1001,11 +1360,12 @@ class FlutterContacts {
             ops: MutableList<ContentProviderOperation>,
             rawContactId: String? = null
         ) {
-            fun emptyToNull(s: String): String? = if (s.isEmpty()) "" else s
+            fun emptyToNull(s: String): String? = s.ifEmpty { null }
             fun eventToDate(e: PEvent): String =
                 (if (e.year == null) "--" else "${e.year.toString().padStart(4, '0')}-") +
-                    "${e.month.toString().padStart(2, '0')}-" +
-                    "${e.day.toString().padStart(2, '0')}"
+                        "${e.month.toString().padStart(2, '0')}-" +
+                        e.day.toString().padStart(2, '0')
+
             fun newInsert(): ContentProviderOperation.Builder =
                 if (rawContactId != null)
                     ContentProviderOperation
@@ -1030,7 +1390,7 @@ class FlutterContacts {
                     .withValue(StructuredName.PHONETIC_FAMILY_NAME, emptyToNull(name.lastPhonetic))
                     .build()
             )
-            if (!name.nickname.isEmpty()) {
+            if (name.nickname.isNotEmpty()) {
                 ops.add(
                     newInsert()
                         .withValue(Data.MIMETYPE, Nickname.CONTENT_ITEM_TYPE)

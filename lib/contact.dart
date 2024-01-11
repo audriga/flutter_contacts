@@ -67,6 +67,8 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 ///   - [accounts] represent raw accounts on Android and containers on iOS
 class Contact {
   /// The unique identifier of the contact.
+  /// On android this is the `contact_id` when [isUnified] is true
+  /// and the `raw_contact_id` if [isUnified] is false.
   String id;
 
   /// The contact display name.
@@ -111,7 +113,7 @@ class Contact {
   /// Notes.
   List<Note> notes;
 
-  /// Raw accounts (Android only).
+  /// Accounts of the source raw contacts (Android only).
   List<Account> accounts;
 
   /// Groups.
@@ -128,6 +130,9 @@ class Contact {
 
   /// Whether properties (name, phones, emails, etc).
   bool propertiesFetched = true;
+
+  /// Android only: Whether the contact is a raw contact
+  bool get isRaw => !isUnified && accounts.length == 1 && id == accounts.first.rawId;
 
   Contact({
     this.id = '',
