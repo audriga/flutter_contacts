@@ -1,7 +1,7 @@
 package co.quis.flutter_contacts.properties
 
 data class Account(
-    var rawId: String,
+    var rawId: String, // todo this is not nullable. But there is no such thing as a raw account id!
     var type: String,
     var name: String,
     var mimetypes: List<String> = listOf<String>()

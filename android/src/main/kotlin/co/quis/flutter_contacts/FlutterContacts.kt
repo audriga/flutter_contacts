@@ -411,9 +411,10 @@ class FlutterContacts {
 
         fun queryDeleted(
             resolver: ContentResolver,
-            account: Account
+            accountMap: Map<String, Any>
 
         ) :  List<Map<String, Any?>> {
+            val account = Account.fromMap(accountMap)
             // List of all contacts.
             var contacts = mutableListOf<Contact>()
             resolver.query(RawContacts.CONTENT_URI.buildUpon()
@@ -707,7 +708,7 @@ class FlutterContacts {
                 /*withPhoto=*/true,
                 /*withGroups=*/false, // slower, usually not needed
                 /*withAccounts=*/true,
-                /*returnUnifiedContacts=*/true,
+                /*returnUnifiedContacts=*/true, //
                 /*includeNonVisible=*/true,
                 /*idIsRawContactId=*/true
             )
@@ -838,12 +839,10 @@ class FlutterContacts {
             // From https://github.com/bitfireAT/vcard4android/blob/main/lib/src/main/java/at/bitfire/vcard4android/AndroidContact.kt
 
             // Delete known data rows before adding the new ones.
-            // - We don't delete group memberships because they're managed separately.
             // - We'll only delete rows we have inserted so that unknown rows like
             //   vnd.android.cursor.item/important_people (= contact is in Samsung "edge panel") remain untouched.
-
-            /// TODO Cursor here
-            ///  Was weiter unten ist is not copy-paste von nicht-raw funktion.
+            // The main difference to prior update method is that rows of other raw accounts will not be
+            // deleted as only one raw account will be inserted in the end.
 
 
             ops.add(
@@ -879,6 +878,8 @@ class FlutterContacts {
                         .build()
                 )
             }
+
+            // todo Groups are only deleted when withGroups flag is true. However groups are always inserted, irregardless of that flag.
             if (withGroups) {
                 ops.add(
                     ContentProviderOperation.newDelete(Data.CONTENT_URI)
@@ -902,13 +903,13 @@ class FlutterContacts {
             // Save.
             resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
 
-            // Update starred status.
+            // Update starred status. Note: This is only for this raw contact which might lead to the contact not being shown as starred/un-starred in the contacts app.
             val contentValues = ContentValues()
             contentValues.put(Contacts.STARRED, if (contact.isStarred) 1 else 0)
             resolver.update(
                 Contacts.CONTENT_URI,
                 contentValues,
-                Data.RAW_CONTACT_ID + "=?", // todo this is wrong. It should either be Data.RAW_CONTACT_ID to just update the raw contact's starred status or `contact_id` to update all raw contacts
+                Data.RAW_CONTACT_ID + "=?",
                 /*selectionArgs=*/arrayOf(rawContactId)
             )
 
@@ -920,7 +921,7 @@ class FlutterContacts {
                 withProperties = true,
                 withThumbnail = true,
                 withPhoto = true,
-                withGroups = false, // slower, usually not needed
+                withGroups = withGroups, // slower, usually not needed
                 withAccounts = true,
                 returnUnifiedContacts = false,
                 includeNonVisible = true,

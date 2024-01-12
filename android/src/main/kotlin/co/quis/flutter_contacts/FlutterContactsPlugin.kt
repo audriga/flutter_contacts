@@ -43,16 +43,16 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
 
     // --- FlutterPlugin implementation ---
 
-    override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-        val channel = MethodChannel(flutterPluginBinding.getFlutterEngine().getDartExecutor(), "github.com/QuisApp/flutter_contacts")
-        val eventChannel = EventChannel(flutterPluginBinding.getFlutterEngine().getDartExecutor(), "github.com/QuisApp/flutter_contacts/events")
+    override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+        val channel = MethodChannel(flutterPluginBinding.binaryMessenger, "github.com/QuisApp/flutter_contacts")
+        val eventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "github.com/QuisApp/flutter_contacts/events")
         channel.setMethodCallHandler(FlutterContactsPlugin())
         eventChannel.setStreamHandler(FlutterContactsPlugin())
         context = flutterPluginBinding.applicationContext
         resolver = context!!.contentResolver
     }
 
-    override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         coroutineScope.cancel()
     }
 
@@ -62,7 +62,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
 
     override fun onDetachedFromActivityForConfigChanges() { activity = null }
 
-    override fun onReattachedToActivityForConfigChanges(@NonNull binding: ActivityPluginBinding) {
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
         binding.addRequestPermissionsResultListener(this)
         binding.addActivityResultListener(this)
@@ -171,7 +171,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
 
     // --- MethodCallHandler implementation ---
 
-    override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
+    override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             // Requests permission to read/write contacts.
             "requestPermission" ->
@@ -225,6 +225,18 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                         )
                     coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
                 }
+            // Gets all "soft deleted" contacts for a given account
+            "queryDeleted" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val args = call.arguments as List<Any>
+                    val accountMap =  args[0] as Map<String, Any>
+                    val contacts: List<Map<String, Any?>> =
+                        FlutterContacts.queryDeleted(
+                            resolver!!,
+                            accountMap
+                        )
+                    coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
+                }
             // Inserts a new contact and return it.
             "insert" ->
                 coroutineScope.launch(Dispatchers.IO) {
@@ -256,10 +268,32 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                         }
                     }
                 }
+            // Updates an existing raw contact and returns it.
+            "updateRaw" ->
+                coroutineScope.launch(Dispatchers.IO) {
+                    val args = call.arguments as List<Any>
+                    val contact = args[0] as Map<String, Any>
+                    val withGroups = args[1] as Boolean
+                    val updatedContact: Map<String, Any?>? =
+                        FlutterContacts.updateRaw(resolver!!, contact, withGroups)
+                    coroutineScope.launch(Dispatchers.Main) {
+                        if (updatedContact != null) {
+                            result.success(updatedContact)
+                        } else {
+                            result.error("", "failed to update contact", "")
+                        }
+                    }
+                }
             // Deletes contacts with given IDs.
             "delete" ->
                 coroutineScope.launch(Dispatchers.IO) {
                     FlutterContacts.delete(resolver!!, call.arguments as List<String>)
+                    coroutineScope.launch(Dispatchers.Main) { result.success(null) }
+                }
+            // Deletes raw contacts with given raw IDs.
+            "deleteRaw" ->
+                coroutineScope.launch(Dispatchers.IO) {
+                    FlutterContacts.deleteRaw(resolver!!, call.arguments as List<String>)
                     coroutineScope.launch(Dispatchers.Main) { result.success(null) }
                 }
             // Fetches all groups.

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_contacts/config.dart';
 import 'package:flutter_contacts/contact.dart';
 import 'package:flutter_contacts/diacritics.dart';
+import 'package:flutter_contacts/properties/account.dart';
 import 'package:flutter_contacts/properties/group.dart';
 
 export 'contact.dart';
@@ -86,6 +87,24 @@ class FlutterContacts {
         deduplicateProperties: deduplicateProperties,
       );
 
+  /// Android-only convenience method to get raw Contacts
+  static Future<List<Contact>> getRawContacts({
+    bool withThumbnail = false,
+    bool withPhoto = false,
+    bool withGroups = false,
+    bool sorted = true,
+  }) async =>
+      _select(
+        withProperties: true,
+        withThumbnail: withThumbnail,
+        withPhoto: withPhoto,
+        withGroups: withGroups,
+        withAccounts: true,
+        sorted: sorted,
+        deduplicateProperties: false,
+        returnUnifiedContacts: false,
+      );
+
   /// Fetches one contact.
   ///
   /// By default everything available is fetched. If [withProperties] is
@@ -137,13 +156,19 @@ class FlutterContacts {
   /// the input can't have an ID, but the output will. If you intend to perform
   /// operations on the contact after creation, you should perform them on the
   /// output rather than on the input.
+  ///
+  /// On Android, this will always insert a raw Contact. If there is no account
+  /// Account type and name will be set to null and potentially be populated by
+  /// Android system with default account details.
+  /// If one or multiple accounts are given, contact is inserted as raw contact
+  /// of first account.
   static Future<Contact> insertContact(Contact contact) async {
     // This avoids the accidental case where we want to update a contact but
     // insert it instead, which would result in two identical contacts.
     if (contact.id.isNotEmpty) {
       throw Exception('Cannot insert contact that already has an ID');
     }
-    if (!contact.isUnified) {
+    if (!contact.isUnified && Platform.isIOS) {
       throw Exception('Cannot insert raw contacts');
     }
     final json = await _channel.invokeMethod('insert', [
@@ -158,6 +183,8 @@ class FlutterContacts {
   /// Note that output contact may be different from the input. If you intend to
   /// perform operations on the contact after update, you should perform them on
   /// the output rather than on the input.
+  /// Note that on Android this deletes a set of properties for all raw contacts contributing
+  /// to the unified contact and re-insets them only for the first raw Contact.
   static Future<Contact> updateContact(
     Contact contact, {
     bool withGroups = false,
@@ -194,6 +221,35 @@ class FlutterContacts {
     return Contact.fromJson(Map<String, dynamic>.from(json));
   }
 
+  /// Updates existing raw contact and returns it.
+  /// Android only.
+  static Future<Contact> updateRawContact(
+    Contact contact, {
+    bool withGroups = false,
+  }) async {
+    if (Platform.isIOS) throw Exception('Raw Contact operations only possible on Android');
+    // In addition, on Android we need a raw contact ID.
+    if (!contact.isRaw) {
+      throw Exception(
+          'Cannot update raw contact without raw ID.');
+    }
+    // This avoids the accidental case where we try to update a contact before
+    // fetching all their properties or photos, which would erase the existing
+    // properties or photos.
+    if (!contact.propertiesFetched || !contact.photoFetched) {
+      throw Exception(
+          'Cannot update contact without properties and photo, make sure to '
+          'specify `withProperties: true` and `withPhoto: true` when fetching '
+          'contacts');
+    }
+    final json = await _channel.invokeMethod('updateRaw', [
+      contact.toJson(),
+      withGroups,
+      config.includeNotesOnIos13AndAbove,
+    ]);
+    return Contact.fromJson(Map<String, dynamic>.from(json));
+  }
+
   /// Deletes contacts from the database.
   static Future<void> deleteContacts(List<Contact> contacts) async {
     final ids = contacts.map((c) => c.id).toList();
@@ -202,6 +258,20 @@ class FlutterContacts {
     }
     if (contacts.any((c) => !c.isUnified)) {
       throw Exception('Cannot delete raw contacts');
+    }
+    await _channel.invokeMethod('delete', ids);
+  }
+
+  /// Deletes raw contacts from the database.
+  /// Android only.
+  static Future<void> deleteRawContacts(List<Contact> contacts) async {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    final ids = contacts.map((c) => c.id).toList();
+    if (ids.any((x) => x.isEmpty)) {
+      throw Exception('Cannot delete contacts without IDs');
+    }
+    if (contacts.any((x) => !x.isRaw)) {
+      throw Exception('This function can only delete raw contacts');
     }
     await _channel.invokeMethod('delete', ids);
   }
@@ -235,6 +305,28 @@ class FlutterContacts {
   /// Deletes a group (or label on Android).
   static Future<void> deleteGroup(Group group) async {
     await _channel.invokeMethod('deleteGroup', [group.toJson()]);
+  }
+
+  /// Lists contacts for a given Account that have been marked as deleted
+  static Future<List<Contact>> getDeletedContacts({
+    required Account account
+  }) async {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    // These properties are neither needed nor looked at, but are required non-null on kotlin side...
+    account.rawId = '';
+    account.mimetypes = [];
+    List untypedContacts = await _channel.invokeMethod('queryDeleted', [
+      account
+    ]);
+    // ignore: omit_local_variable_types
+    List<Contact> contacts = untypedContacts
+        .map((x) => Contact.fromJson(Map<String, dynamic>.from(x)))
+        .toList();
+
+    contacts.forEach((c) => c
+      ..propertiesFetched = true
+      ..isUnified = false);
+    return contacts;
   }
 
   /// Listens to contact database changes.
@@ -317,6 +409,7 @@ class FlutterContacts {
     bool withAccounts = false,
     bool sorted = true,
     bool deduplicateProperties = true,
+    bool? returnUnifiedContacts
   }) async {
     // removing the types makes it crash at runtime
     // ignore: omit_local_variable_types
@@ -327,7 +420,7 @@ class FlutterContacts {
       withPhoto,
       withGroups,
       withAccounts,
-      config.returnUnifiedContacts,
+      returnUnifiedContacts ?? config.returnUnifiedContacts,
       config.includeNonVisibleOnAndroid,
       config.includeNotesOnIos13AndAbove,
     ]);
