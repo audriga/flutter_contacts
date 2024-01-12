@@ -8,9 +8,9 @@ class NoteForm extends StatefulWidget {
 
   NoteForm(
     this.note, {
-    @required this.onUpdate,
-    @required this.onDelete,
-    Key key,
+    required this.onUpdate,
+    required this.onDelete,
+    Key? key,
   }) : super(key: key);
 
   @override
@@ -20,7 +20,7 @@ class NoteForm extends StatefulWidget {
 class _NoteFormState extends State<NoteForm> {
   final _formKey = GlobalKey<FormState>();
 
-  TextEditingController _noteController;
+  late TextEditingController _noteController;
 
   @override
   void initState() {

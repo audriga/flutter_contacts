@@ -12,7 +12,7 @@ class ContactListPage extends StatefulWidget {
 
 class _ContactListPageState extends State<ContactListPage>
     with AfterLayoutMixin<ContactListPage> {
-  List<Contact> _contacts;
+  List<Contact>? _contacts;
   bool _permissionDenied = false;
 
   @override
@@ -92,12 +92,12 @@ class _ContactListPageState extends State<ContactListPage>
       return Center(child: Text('Permission denied'));
     }
     if (_contacts == null) {
-      return Center(child: CircularProgressIndicator());
-    }
-    return ListView.builder(
-      itemCount: _contacts.length,
+      return Center(child: Text('Could not get contacts'));
+    } else {
+      return ListView.builder(
+      itemCount: _contacts!.length,
       itemBuilder: (context, i) {
-        final contact = _contacts[i];
+        final contact = _contacts![i];
         return ListTile(
           leading: avatar(contact, 18.0),
           title: Text(contact.displayName),
@@ -108,6 +108,7 @@ class _ContactListPageState extends State<ContactListPage>
         );
       },
     );
+    }
   }
 
   void _handleOverflowSelected(String value) {

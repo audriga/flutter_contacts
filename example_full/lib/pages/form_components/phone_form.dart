@@ -8,9 +8,9 @@ class PhoneForm extends StatefulWidget {
 
   PhoneForm(
     this.phone, {
-    @required this.onUpdate,
-    @required this.onDelete,
-    Key key,
+    required this.onUpdate,
+    required this.onDelete,
+    Key? key,
   }) : super(key: key);
 
   @override
@@ -21,9 +21,9 @@ class _PhoneFormState extends State<PhoneForm> {
   final _formKey = GlobalKey<FormState>();
   static final _validLabels = PhoneLabel.values;
 
-  TextEditingController _numberController;
-  PhoneLabel _label;
-  TextEditingController _customLabelController;
+  late TextEditingController _numberController;
+  late PhoneLabel _label;
+  late TextEditingController _customLabelController;
 
   @override
   void initState() {
@@ -70,9 +70,11 @@ class _PhoneFormState extends State<PhoneForm> {
                     .toList(),
                 value: _label,
                 onChanged: (label) {
-                  setState(() {
-                    _label = label;
-                  });
+                  if (label is PhoneLabel) {
+                    setState(() {
+                      _label = label;
+                    });
+                  }
                   // Unfortunately, the form's `onChanged` gets triggered before
                   // the dropdown's `onChanged`, so it doesn't update the
                   // contact when updating the dropdown, and we need to do it

@@ -23,22 +23,20 @@ class _EditContactPageState extends State<EditContactPage>
     with AfterLayoutMixin<EditContactPage> {
   var _contact = Contact();
   bool _isEdit = false;
-  void Function() _onUpdate;
+  late void Function() _onUpdate;
 
   final _imagePicker = ImagePicker();
 
   @override
   void afterFirstLayout(BuildContext context) {
     final args =
-        ModalRoute.of(context).settings.arguments as Map<String, dynamic>;
-    if (args != null) {
-      setState(() {
-        _contact = args['contact'];
-        _isEdit = true;
-        _onUpdate = args['onUpdate'];
-      });
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>;
+    setState(() {
+      _contact = args['contact'];
+      _isEdit = true;
+      _onUpdate = args['onUpdate'];
+    });
     }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +76,7 @@ class _EditContactPageState extends State<EditContactPage>
               } else {
                 await _contact.insert();
               }
-              if (_onUpdate != null) _onUpdate();
+              _onUpdate();
               Navigator.of(context).pop();
             },
           ),
@@ -117,7 +115,7 @@ class _EditContactPageState extends State<EditContactPage>
       ];
 
   Future _pickPhoto() async {
-    final photo = await _imagePicker.getImage(source: ImageSource.camera);
+    final photo = await _imagePicker.pickImage(source: ImageSource.camera);
     if (photo != null) {
       final bytes = await photo.readAsBytes();
       setState(() {
@@ -171,24 +169,20 @@ class _EditContactPageState extends State<EditContactPage>
           });
     }
     var buttons = <ElevatedButton>[];
-    if (addField != null) {
-      buttons.add(
-        ElevatedButton(
-          onPressed: onPressed,
-          child: Text('+ New'),
-        ),
-      );
-    }
-    if (clearAllFields != null) {
+    buttons.add(
+      ElevatedButton(
+        onPressed: onPressed,
+        child: Text('+ New'),
+      ),
+    );
       buttons.add(ElevatedButton(
-        onPressed: () {
-          clearAllFields();
-          setState(() {});
-        },
-        child: Text('Delete all'),
-      ));
-    }
-    if (buttons.isNotEmpty) {
+      onPressed: () {
+        clearAllFields();
+        setState(() {});
+      },
+      child: Text('Delete all'),
+    ));
+      if (buttons.isNotEmpty) {
       forms.add(Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: buttons,
@@ -213,13 +207,13 @@ class _EditContactPageState extends State<EditContactPage>
   Card _nameCard() => _fieldCard(
         'Name',
         [_contact.name],
-        null,
+        () {},
         (int i, dynamic n) => NameForm(
           n,
           onUpdate: (name) => _contact.name = name,
           key: UniqueKey(),
         ),
-        null,
+        () {},
       );
 
   Card _phoneCard() => _fieldCard(
@@ -301,7 +295,7 @@ class _EditContactPageState extends State<EditContactPage>
         () => _contact.socialMedias = [],
       );
 
-  Future<DateTime> _selectDate(BuildContext context) async => showDatePicker(
+  Future<DateTime?> _selectDate(BuildContext context) => showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(1900),
@@ -316,7 +310,7 @@ class _EditContactPageState extends State<EditContactPage>
             _contact.events = _contact.events +
                 [Event(year: date.year, month: date.month, day: date.day)];
           }
-        },
+          },
         (int i, dynamic w) => EventForm(
           w,
           onUpdate: (event) => _contact.events[i] = event,
@@ -333,7 +327,7 @@ class _EditContactPageState extends State<EditContactPage>
         () => _contact.notes = _contact.notes + [Note('')],
         (int i, dynamic w) => NoteForm(
           w,
-          onUpdate: null,
+          onUpdate: (_) {},
           onDelete: () => setState(() => _contact.groups.removeAt(i)),
           key: UniqueKey(),
         ),
@@ -368,19 +362,20 @@ class _EditContactPageState extends State<EditContactPage>
             SizedBox(width: 24.0),
             Checkbox(
               value: _contact.isStarred,
-              onChanged: (bool isStarred) =>
-                  setState(() => _contact.isStarred = isStarred),
+              onChanged: (bool? isStarred) {
+                if (isStarred != null) setState(() => _contact.isStarred = isStarred);
+              }
             ),
           ],
         ),
       );
 
-  Future<Group> _promptGroup({@required List<Group> exclude}) async {
+  Future<Group?> _promptGroup({required List<Group> exclude}) async {
     final excludeIds = exclude.map((x) => x.id).toSet();
     final groups = (await FlutterContacts.getGroups())
         .where((g) => !excludeIds.contains(g.id))
         .toList();
-    Group selectedGroup;
+    Group? selectedGroup;
     await showDialog(
       context: context,
       builder: (BuildContext ctx) => AlertDialog(

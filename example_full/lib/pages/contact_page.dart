@@ -11,11 +11,11 @@ class ContactPage extends StatefulWidget {
 
 class _ContactPageState extends State<ContactPage>
     with AfterLayoutMixin<ContactPage> {
-  Contact _contact;
+  late Contact _contact;
 
   @override
   void afterFirstLayout(BuildContext context) {
-    final contact = ModalRoute.of(context).settings.arguments as Contact;
+    final contact = ModalRoute.of(context)?.settings.arguments as Contact;
     setState(() {
       _contact = contact;
     });
@@ -30,7 +30,7 @@ class _ContactPageState extends State<ContactPage>
     await _fetchContactWith(highRes: true);
   }
 
-  Future _fetchContactWith({@required bool highRes}) async {
+  Future _fetchContactWith({required bool highRes}) async {
     final contact = await FlutterContacts.getContact(
       _contact.id,
       withThumbnail: !highRes,
@@ -38,16 +38,18 @@ class _ContactPageState extends State<ContactPage>
       withGroups: true,
       withAccounts: true,
     );
-    setState(() {
-      _contact = contact;
-    });
+    if (contact != null ) {
+      setState(() {
+        _contact = contact;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_contact?.displayName ?? ''),
+        title: Text(_contact.displayName),
         actions: [
           IconButton(
             icon: Icon(Icons.remove_red_eye),
@@ -102,9 +104,6 @@ class _ContactPageState extends State<ContactPage>
   }
 
   Widget _body(Contact contact) {
-    if (_contact?.name == null) {
-      return Center(child: CircularProgressIndicator());
-    }
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -253,7 +252,7 @@ class _ContactPageState extends State<ContactPage>
   }
 
   String _formatDate(Event e) =>
-      '${e.year?.toString()?.padLeft(4, '0') ?? '--'}/'
+      '${e.year?.toString().padLeft(4, '0') ?? '--'}/'
       '${e.month.toString().padLeft(2, '0')}/'
       '${e.day.toString().padLeft(2, '0')}';
 
@@ -266,7 +265,7 @@ class _ContactPageState extends State<ContactPage>
   Card _makeCard(
       String title, List fields, List<Widget> Function(dynamic) mapper) {
     var elements = <Widget>[];
-    fields?.forEach((field) => elements.addAll(mapper(field)));
+    fields.forEach((field) => elements.addAll(mapper(field)));
     return Card(
       child: Padding(
         padding: EdgeInsets.all(8),
