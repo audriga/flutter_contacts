@@ -32,6 +32,7 @@ class FlutterContacts {
   static final _eventSubscribers = <void Function()>[];
   static final _alpha = RegExp(r'\p{Letter}', unicode: true);
   static final _numeric = RegExp(r'\p{Number}', unicode: true);
+  static const String _KeyAccount = 'account_map';
 
   /// Plugin configuration.
   static var config = FlutterContactsConfig();
@@ -196,7 +197,7 @@ class FlutterContacts {
     }
     // In addition, on Android we need a raw contact ID.
     if (Platform.isAndroid &&
-        !contact.accounts.any((x) => x.rawId.isNotEmpty)) {
+        !contact.accounts.any((x) => x.rawId?.isNotEmpty ?? false)) {
       throw Exception(
           'Cannot update contact without raw ID on Android, make sure to '
           'specify `withAccounts: true` when fetching contacts');
@@ -307,17 +308,15 @@ class FlutterContacts {
     await _channel.invokeMethod('deleteGroup', [group.toJson()]);
   }
 
-  /// Lists contacts for a given Account that have been marked as deleted
+  /// Lists contacts that have been marked as deleted.
+  /// If [account] is given restricts search to contacts of that account
   static Future<List<Contact>> getDeletedContacts({
-    required Account account
+    Account? account
   }) async {
     if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
-    // These properties are neither needed nor looked at, but are required non-null on kotlin side...
-    account.rawId = '';
-    account.mimetypes = [];
-    List untypedContacts = await _channel.invokeMethod('queryDeleted', [
-      account
-    ]);
+    List untypedContacts = await _channel.invokeMethod(
+      'queryDeleted', {_KeyAccount: account?.toJson()},
+    );
     // ignore: omit_local_variable_types
     List<Contact> contacts = untypedContacts
         .map((x) => Contact.fromJson(Map<String, dynamic>.from(x)))

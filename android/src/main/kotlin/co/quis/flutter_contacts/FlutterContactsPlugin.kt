@@ -37,6 +37,8 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
         private var editResult: Result? = null
         private var pickResult: Result? = null
         private var insertResult: Result? = null
+
+        private const val ACCOUNT_PARAMETER = "account_map"
     }
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -228,8 +230,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
             // Gets all "soft deleted" contacts for a given account
             "queryDeleted" ->
                 coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
-                    val args = call.arguments as List<Any>
-                    val accountMap =  args[0] as Map<String, Any>
+                    val accountMap = call.argument<HashMap<String, Any>?>(ACCOUNT_PARAMETER)
                     val contacts: List<Map<String, Any?>> =
                         FlutterContacts.queryDeleted(
                             resolver!!,

@@ -1,13 +1,14 @@
 /// Account information, which is exposed for information and debugging purposes
 /// and should be ignored in most cases.
 ///
-/// On Android this is the raw account, and there can be several accounts per
-/// unified contact (for example one for Gmail, one for Skype and one for
-/// WhatsApp). On iOS it is called container, and there can be only one
+/// On Android this is the account associated with a raw contact,
+/// and there can be several raw contacts per unified contact (for example
+/// one for Gmail, one for Skype and one for  WhatsApp).
+/// On iOS it is called container, and there can be only one
 /// container per contact.
 class Account {
-  /// Raw account ID.
-  String rawId;
+  /// Raw contact id of contact
+  String? rawId;
 
   /// Account type, e.g. com.google or com.facebook.messenger.
   String type;
@@ -16,7 +17,7 @@ class Account {
   String name;
 
   /// Android mimetypes provided by this account.
-  List<String> mimetypes;
+  List<String>? mimetypes;
 
   Account(this.rawId, this.type, this.name, this.mimetypes);
 
@@ -31,7 +32,7 @@ class Account {
         'rawId': rawId,
         'type': type,
         'name': name,
-        'mimetypes': mimetypes,
+        'mimetypes': mimetypes ?? [],
       };
 
   @override
