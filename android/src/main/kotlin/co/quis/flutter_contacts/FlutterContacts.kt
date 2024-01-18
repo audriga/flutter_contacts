@@ -244,7 +244,7 @@ class FlutterContacts {
                             if (account.rawId == rawId) {
                                 accountSeen = true
                                 account.mimetypes =
-                                    (account.mimetypes + mimetype).toSortedSet().toList()
+                                    (account.mimetypes?.plus(mimetype) ?: listOf(mimetype)).toSortedSet().toList()
                             }
                         }
                         if (!accountSeen) {
@@ -465,6 +465,88 @@ class FlutterContacts {
             return contacts.map { it.toMap() }
         }
 
+        /**
+         * Gets a list of contacts marked as dirty.
+         * Fetches them from the RawContacts table and then uses select(...) to get their properties
+         * from the Data table.
+         * Can't directly query dirty flags from the data table because we would only get the dirty
+         * attributes of these contacts
+         */
+        fun queryDirty(
+            resolver: ContentResolver,
+            accountMap: Map<String, Any>?
+
+        ) :  List<Map<String, Any?>> {
+            val contacts = mutableListOf<Map<String, Any?>>()
+            val uriWithQueryParameters = RawContacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
+
+            if (accountMap != null) {
+                val account = Account.fromMap(accountMap)
+                uriWithQueryParameters
+                    .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
+                    .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
+            }
+            resolver.query(
+                uriWithQueryParameters
+                .build(), null,
+                RawContacts.DIRTY, null, null)?.use { cursor ->
+
+
+                fun getString(col: String): String = cursor.getString(cursor.getColumnIndex(col)) ?: ""
+
+                while (cursor.moveToNext()) {
+                    // ID and display name.
+                    val rawId = getString(RawContacts._ID)
+
+                    // Get properties of dirty contacts
+                    val dirtyContact: List<Map<String, Any?>> = select(
+                        resolver = resolver,
+                        id= rawId,
+                        withProperties= true,
+                        withThumbnail = true,
+                        withPhoto= true,
+                        withGroups = true,
+                        withAccounts= true,
+                        returnUnifiedContacts = false ,
+                        includeNonVisible =true,
+                        idIsRawContactId = true,
+                        )
+
+                    contacts.addAll(dirtyContact)
+                }
+
+                cursor.close()
+
+
+            }
+            return contacts
+        }
+
+
+        fun clearDirty(
+            resolver: ContentResolver,
+            rawContactIds: List<String>,
+        ) : Int {
+            val uriWithQueryParameters = RawContacts.CONTENT_URI.buildUpon()
+                .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
+
+            var totalRowsUpdated = 0
+            val contentValues = ContentValues()
+            contentValues.put(RawContacts.DIRTY, 0)
+            for (rawId in rawContactIds) {
+                totalRowsUpdated += resolver.update(
+                    uriWithQueryParameters.build(),
+                    contentValues,
+                    /*where=*/RawContacts._ID + "=?",
+                    /*selectionArgs=*/arrayOf(rawId)
+                )
+            }
+
+
+            return totalRowsUpdated
+        }
+
         fun insert(
             resolver: ContentResolver,
             contactMap: Map<String, Any?>
@@ -607,7 +689,7 @@ class FlutterContacts {
 
             buildOpsForContact(contact, ops, rawContactId) //todo this is the rawId of the first contact
             if (contact.photo != null) {
-                buildOpsForPhoto(resolver, contact.photo!!, ops, rawContactId.toLong())
+                buildOpsForPhoto(resolver, contact.photo!!, ops, rawContactId!!.toLong())
             }
 
             // Save.

@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
-import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -39,6 +38,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
         private var insertResult: Result? = null
 
         private const val ACCOUNT_PARAMETER = "account_map"
+        private const val RAW_CONTACT_IDS_PARAMETER = "raw_contact_ids"
     }
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -211,6 +211,9 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                     val returnUnifiedContacts = args[6] as Boolean
                     val includeNonVisible = args[7] as Boolean
                     // args[8] = includeNotesOnIos13AndAbove
+//                    val accountMap: HashMap<String, Any>?
+//                    @Suppress("UNCHECKED_CAST")
+//                    if (args[9] is HashMap<*, *>) accountMap = args[9] as HashMap<String, Any>
                     val contacts: List<Map<String, Any?>> =
                         FlutterContacts.select(
                             resolver!!,
@@ -237,6 +240,30 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                             accountMap
                         )
                     coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
+                }
+            // Gets all contacts marked dirty for a given account
+            "queryDirty" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val accountMap = call.argument<HashMap<String, Any>?>(ACCOUNT_PARAMETER)
+                    val contacts: List<Map<String, Any?>> =
+                        FlutterContacts.queryDirty(
+                            resolver!!,
+                            accountMap
+                        )
+                    coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
+                }
+            // Clears dirty bit for given raw_contact_id
+            "clearDirty" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val rawIds = call.argument<List<String>>(RAW_CONTACT_IDS_PARAMETER)
+                    val changedLines: Int =
+                        rawIds?.let {
+                            FlutterContacts.clearDirty(
+                                resolver!!,
+                                it
+                            )
+                        } ?: -1
+                    coroutineScope.launch(Dispatchers.Main) { result.success(changedLines) }
                 }
             // Inserts a new contact and return it.
             "insert" ->

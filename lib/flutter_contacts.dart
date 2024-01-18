@@ -33,6 +33,7 @@ class FlutterContacts {
   static final _alpha = RegExp(r'\p{Letter}', unicode: true);
   static final _numeric = RegExp(r'\p{Number}', unicode: true);
   static const String _KeyAccount = 'account_map';
+  static const String _KeyRawContactIds = 'raw_contact_ids';
 
   /// Plugin configuration.
   static var config = FlutterContactsConfig();
@@ -326,6 +327,37 @@ class FlutterContacts {
       ..propertiesFetched = true
       ..isUnified = false);
     return contacts;
+  }
+
+  /// Lists contacts that have been marked as dirty.
+  /// If [account] is given restricts search to contacts of that account
+  static Future<List<Contact>> getDirtyContacts({
+    Account? account
+  }) async {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    List untypedContacts = await _channel.invokeMethod(
+      'queryDirty', {_KeyAccount: account?.toJson()},
+    );
+    // ignore: omit_local_variable_types
+    List<Contact> contacts = untypedContacts
+        .map((x) => Contact.fromJson(Map<String, dynamic>.from(x)))
+        .toList();
+
+    contacts.forEach((c) => c
+      ..propertiesFetched = true
+      ..isUnified = false);
+    return contacts;
+  }
+
+  ///
+  static Future<int> clearDirtyContacts({
+    required List<String> rawContactIds,
+  }) async {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    int linesChanged = await _channel.invokeMethod(
+      'clearDirty', {_KeyRawContactIds: rawContactIds},
+    );
+    return linesChanged;
   }
 
   /// Listens to contact database changes.
