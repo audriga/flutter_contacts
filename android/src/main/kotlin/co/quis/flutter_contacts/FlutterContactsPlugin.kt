@@ -39,6 +39,16 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
 
         private const val ACCOUNT_PARAMETER = "account_map"
         private const val RAW_CONTACT_IDS_PARAMETER = "raw_contact_ids"
+        private const val ID_PARAMETER = "id"
+        private const val WITH_PROPERTIES_PARAMETER = "with_properties"
+        private const val WITH_THUMBNAIL_PARAMETER = "with_thumbnail"
+        private const val WITH_PHOTO_PARAMETER = "with_photo"
+        private const val WITH_GROUPS_PARAMETER = "with_groups"
+        private const val WITH_ACCOUNTS_PARAMETER = "with_accounts"
+        private const val RETURN_UNIFIED_CONTACTS_PARAMETER = "return_unified_contacts"
+        private const val INCLUDE_NON_VISIBLE_PARAMETER = "include_non_visible"
+        private const val ID_IS_RAW_CONTACT_ID_PARAMETER = "id_is_raw_contact_od"
+
     }
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -227,6 +237,39 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                             withAccounts,
                             returnUnifiedContacts,
                             includeNonVisible
+                        )
+                    coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
+                }
+            // Selects fields for request contact, or for all contacts.
+            //
+            "selectAdvanced" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val id = call.argument<String>(ID_PARAMETER)
+                    val withProperties = call.argument<Boolean>(WITH_PROPERTIES_PARAMETER) ?: false
+                    val withThumbnail = call.argument<Boolean>(WITH_THUMBNAIL_PARAMETER) ?: false
+                    val withPhoto = call.argument<Boolean>(WITH_PHOTO_PARAMETER) ?: false
+                    val withGroups = call.argument<Boolean>(WITH_GROUPS_PARAMETER) ?: false
+                    val withAccounts = call.argument<Boolean>(WITH_ACCOUNTS_PARAMETER) ?: false
+                    val returnUnifiedContacts = call.argument<Boolean>(RETURN_UNIFIED_CONTACTS_PARAMETER) ?: false
+                    val includeNonVisible = call.argument<Boolean>(INCLUDE_NON_VISIBLE_PARAMETER) ?: false
+                    val idIsRawContactId = call.argument<Boolean>(ID_IS_RAW_CONTACT_ID_PARAMETER) ?: false
+                    val accountMap = call.argument<HashMap<String, Any>?>(ACCOUNT_PARAMETER)
+
+                    val contacts: List<Map<String, Any?>> =
+                        FlutterContacts.select(
+                            resolver = resolver!!,
+                            id = id,
+                            withProperties = withProperties,
+                            // Sometimes thumbnail is available but photo is not, so we
+                            // fetch thumbnails even if only the photo was requested.
+                            withThumbnail = withThumbnail || withPhoto,
+                            withPhoto = withPhoto,
+                            withGroups = withGroups,
+                            withAccounts = withAccounts,
+                            returnUnifiedContacts = returnUnifiedContacts,
+                            includeNonVisible = includeNonVisible,
+                            idIsRawContactId = idIsRawContactId,
+                            accountMap = accountMap
                         )
                     coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
                 }

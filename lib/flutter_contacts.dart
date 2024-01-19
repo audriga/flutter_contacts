@@ -34,6 +34,15 @@ class FlutterContacts {
   static final _numeric = RegExp(r'\p{Number}', unicode: true);
   static const String _KeyAccount = 'account_map';
   static const String _KeyRawContactIds = 'raw_contact_ids';
+  static const String _KeyId = 'id';
+  static const String _KeyWithProperties = 'with_properties';
+  static const String _KeyWithThumbnail = 'with_thumbnail';
+  static const String _KeyWithPhoto = 'with_photo';
+  static const String _KeyWithGroups = 'with_groups';
+  static const String _KeyWithAccounts = 'with_accounts';
+  static const String _KeyReturnUnifiedContacts = 'return_unified_contacts';
+  static const String _KeyIncludeNonVisible = 'include_non_visible';
+  static const String _KeyIdIsRawContactId = 'id_is_raw_contact_od';
 
   /// Plugin configuration.
   static var config = FlutterContactsConfig();
@@ -90,13 +99,18 @@ class FlutterContacts {
       );
 
   /// Android-only convenience method to get raw Contacts
+  /// Ignores [config.returnUnifiedContacts] and makes sure to always return
+  /// raw contacts
+  ///
+  /// If [account] is given, only contacts belonging to that account will be returned
   static Future<List<Contact>> getRawContacts({
     bool withThumbnail = false,
     bool withPhoto = false,
     bool withGroups = false,
     bool sorted = true,
+    Account? account,
   }) async =>
-      _select(
+      _selectAdvanced(
         withProperties: true,
         withThumbnail: withThumbnail,
         withPhoto: withPhoto,
@@ -105,6 +119,7 @@ class FlutterContacts {
         sorted: sorted,
         deduplicateProperties: false,
         returnUnifiedContacts: false,
+        account: account,
       );
 
   /// Fetches one contact.
@@ -129,6 +144,14 @@ class FlutterContacts {
   /// If [deduplicateProperties] is true, the properties will be de-duplicated,
   /// mainly to avoid the case (common on Android) where multiple equivalent
   /// phones are returned.
+  ///
+  /// Note for Android that this method assumes that id either contact_id, or
+  /// raw_contact_id depending on [config.returnUnifiedContacts].
+  /// This means that if the contact was pre-fetched with
+  /// [config.returnUnifiedContacts] set to true, it should still be set to true
+  /// when this method is called and vice versa.
+  /// If the contact was prefetched using [getRawContacts] use [getRawContactByRawId]
+  /// instead in that case (Or set [config.returnUnifiedContacts] to false).
   static Future<Contact?> getContact(
     String id, {
     bool withProperties = true,
@@ -150,6 +173,28 @@ class FlutterContacts {
     );
     if (contacts.length != 1) return null;
     return contacts.first;
+  }
+
+  static Future<Contact?> getRawContactByRawId(
+    String rawContactId, {
+    bool withProperties = true,
+    bool withThumbnail = true,
+    bool withPhoto = true,
+    bool withGroups = false,
+    bool withAccounts = true,
+  }) async {
+    final contacts = await _selectAdvanced(
+      id: rawContactId,
+      withProperties: withProperties,
+      withThumbnail: withThumbnail,
+      withPhoto: withPhoto,
+      withGroups: withGroups,
+      withAccounts: withAccounts,
+      sorted: false,
+      deduplicateProperties: false,
+      idIsRawContactId: true,
+    );
+    return contacts.single;
   }
 
   /// Inserts a new [contact] in the database and returns it.
@@ -455,6 +500,55 @@ class FlutterContacts {
       config.includeNonVisibleOnAndroid,
       config.includeNotesOnIos13AndAbove,
     ]);
+    // ignore: omit_local_variable_types
+    List<Contact> contacts = untypedContacts
+        .map((x) => Contact.fromJson(Map<String, dynamic>.from(x)))
+        .toList();
+    if (sorted) {
+      contacts.sort(_compareDisplayNames);
+    }
+    if (deduplicateProperties) {
+      contacts.forEach((c) => c.deduplicateProperties());
+    }
+    contacts.forEach((c) => c
+      ..propertiesFetched = withProperties
+      ..thumbnailFetched = withThumbnail
+      ..photoFetched = withPhoto
+      ..isUnified = config.returnUnifiedContacts);
+    return contacts;
+  }
+
+  /// A more configurable version of the previous select method for Android
+  /// If account is given, only contacts for that account are returned
+  static Future<List<Contact>> _selectAdvanced({
+    String? id,
+    Account? account,
+    bool withProperties = false,
+    bool withThumbnail = false,
+    bool withPhoto = false,
+    bool withGroups = false,
+    bool withAccounts = false,
+    bool sorted = true,
+    bool deduplicateProperties = false,
+    bool? returnUnifiedContacts = false,
+    bool? includeNonVisible = false,
+    bool idIsRawContactId = false,
+  }) async {
+    if (!Platform.isAndroid) throw Exception('This method is only available on Android. Use _select instead');
+    List untypedContacts = await _channel.invokeMethod('selectAdvanced',
+      {
+        _KeyId: id,
+        _KeyAccount: account?.toJson(),
+        _KeyWithProperties: withProperties,
+        _KeyWithThumbnail: withThumbnail,
+        _KeyWithPhoto: withPhoto,
+        _KeyWithGroups: withGroups,
+        _KeyWithAccounts: withAccounts,
+        _KeyReturnUnifiedContacts: returnUnifiedContacts?? config.returnUnifiedContacts,
+        _KeyIncludeNonVisible: includeNonVisible?? config.includeNonVisibleOnAndroid,
+        _KeyIdIsRawContactId: idIsRawContactId,
+      },
+    );
     // ignore: omit_local_variable_types
     List<Contact> contacts = untypedContacts
         .map((x) => Contact.fromJson(Map<String, dynamic>.from(x)))

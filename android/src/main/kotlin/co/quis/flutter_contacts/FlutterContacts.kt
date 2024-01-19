@@ -63,7 +63,8 @@ class FlutterContacts {
             withAccounts: Boolean,
             returnUnifiedContacts: Boolean,
             includeNonVisible: Boolean,
-            idIsRawContactId: Boolean = false
+            idIsRawContactId: Boolean = false,
+            accountMap: Map<String, Any>? = null,
         ): List<Map<String, Any?>> {
             if (id == null && !withProperties && !withThumbnail && !withPhoto &&
                 returnUnifiedContacts
@@ -170,9 +171,18 @@ class FlutterContacts {
             // WHERE in the query which seems to double its execution time, so we
             // instead loop through all rows and filter them in Kotlin.
 
+            // Restrict query to contacts of given account, if given.
+            val uriWithQueryParameters = Data.CONTENT_URI.buildUpon()
+            if (accountMap != null) {
+                val account = Account.fromMap(accountMap)
+                uriWithQueryParameters
+                    .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
+                    .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
+            }
+
             // Query contact database.
             val cursor = resolver.query(
-                Data.CONTENT_URI,
+                uriWithQueryParameters.build(),
                 projection.toTypedArray(),
                 selection,
                 selectionArgs,
