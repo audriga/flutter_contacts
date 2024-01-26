@@ -131,6 +131,19 @@ class Contact {
   /// Whether properties (name, phones, emails, etc).
   bool propertiesFetched = true;
 
+  /// Android only.
+  /// Timestamp (milliseconds since epoch) of when this contact was last updated.  This
+  /// includes updates to all data associated with this contact including raw contacts.  Any
+  /// modification (including deletes and inserts) of underlying contact data are also
+  /// reflected in this timestamp.
+  DateTime? contactLastUpdatedTimestamp;
+
+  /// Android only.
+  /// String that uniquely identifies this row to its source account.
+  /// Used by sync adapters to create a mapping between contacts on remote and local contacts.
+  /// todo: Currently read-only, i.e. update method does not care about it.
+  String? sourceId;
+
   /// Android only: Whether the contact is a raw contact
   bool get isRaw => !isUnified && accounts.length == 1 && id == accounts.first.rawId;
 
@@ -151,6 +164,8 @@ class Contact {
     List<Note>? notes,
     List<Account>? accounts,
     List<Group>? groups,
+    DateTime? contactLastUpdatedTimestamp,
+    String? sourceId
   })  : name = name ?? Name(),
         phones = phones ?? <Phone>[],
         emails = emails ?? <Email>[],
@@ -161,7 +176,9 @@ class Contact {
         events = events ?? <Event>[],
         notes = notes ?? <Note>[],
         accounts = accounts ?? <Account>[],
-        groups = groups ?? <Group>[];
+        groups = groups ?? <Group>[],
+        contactLastUpdatedTimestamp = contactLastUpdatedTimestamp,
+        sourceId = sourceId;
 
   factory Contact.fromJson(Map<String, dynamic> json) => Contact(
         id: (json['id'] as String?) ?? '',
@@ -200,7 +217,9 @@ class Contact {
         groups: ((json['groups'] as List?) ?? [])
             .map((x) => Group.fromJson(Map<String, dynamic>.from(x)))
             .toList(),
-      );
+        contactLastUpdatedTimestamp: dateTimeFromUnixTimestamp(json['contactLastUpdatedTimestamp']),
+        sourceId: (json['sourceId'] is String)? json['sourceId'] : null
+  );
 
   Map<String, dynamic> toJson({
     bool withThumbnail = true,
@@ -223,6 +242,8 @@ class Contact {
         'notes': notes.map((x) => x.toJson()).toList(),
         'accounts': accounts.map((x) => x.toJson()).toList(),
         'groups': groups.map((x) => x.toJson()).toList(),
+        'contactLastUpdatedTimestamp': dateTimeToUnixTimestamp(contactLastUpdatedTimestamp),
+        'sourceId': sourceId,
       });
 
   @override
@@ -266,7 +287,9 @@ class Contact {
       'photo=$photo, isStarred=$isStarred, name=$name, phones=$phones, '
       'emails=$emails, addresses=$addresses, organizations=$organizations, '
       'websites=$websites, socialMedias=$socialMedias, events=$events, '
-      'notes=$notes, accounts=$accounts, groups=$groups)';
+      'notes=$notes, accounts=$accounts, groups=$groups)'
+      'contactLastUpdatedTimestamp=${contactLastUpdatedTimestamp?.toString()}, '
+      'sourceId=$sourceId';
 
   /// Inserts the contact into the database.
   Future<Contact> insert() => FlutterContacts.insertContact(this);
@@ -391,4 +414,10 @@ class Contact {
   bool _listEqual(List<dynamic> aa, List<dynamic> bb) =>
       aa.length == bb.length &&
       Iterable.generate(aa.length, (i) => i).every((i) => aa[i] == bb[i]);
+}
+
+DateTime? dateTimeFromUnixTimestamp(dynamic timestamp) => (timestamp is int) ? DateTime.fromMillisecondsSinceEpoch(timestamp * 1000) : null;
+int? dateTimeToUnixTimestamp(DateTime? dateTime) {
+  if (dateTime == null) return null;
+  return dateTime.millisecondsSinceEpoch ~/ 1000;
 }

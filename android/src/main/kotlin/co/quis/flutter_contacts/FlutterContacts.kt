@@ -1,5 +1,6 @@
 package co.quis.flutter_contacts
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ContentProviderOperation
 import android.content.ContentResolver
@@ -10,6 +11,7 @@ import android.content.Intent
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds.Email
 import android.provider.ContactsContract.CommonDataKinds.Event
@@ -43,6 +45,7 @@ import co.quis.flutter_contacts.properties.Phone as PPhone
 import co.quis.flutter_contacts.properties.SocialMedia as PSocialMedia
 import co.quis.flutter_contacts.properties.Website as PWebsite
 
+@SuppressLint("Range")
 class FlutterContacts {
     companion object {
         private val YYYY_MM_DD = """\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|30|31)""".toRegex()
@@ -129,9 +132,13 @@ class FlutterContacts {
                         Event.START_DATE,
                         Event.TYPE,
                         Event.LABEL,
-                        Note.NOTE
+                        Note.NOTE,
+                        RawContacts.SOURCE_ID
                     )
                 )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                    projection.add(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
+                }
             }
             if (withAccounts || !returnUnifiedContacts) {
                 projection.addAll(
@@ -209,8 +216,12 @@ class FlutterContacts {
                     var contact = Contact(
                         /*id=*/id,
                         /*displayName=*/getString(Contacts.DISPLAY_NAME_PRIMARY),
-                        isStarred = getBool(Contacts.STARRED)
+                        isStarred = getBool(Contacts.STARRED),
+                        sourceId = getString(RawContacts.SOURCE_ID)
                     )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                        contact.contactLastUpdatedTimestamp = getInt(Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
+                    }
 
                     // Fetch high-resolution photo if requested.
                     if (withPhoto) {
@@ -447,7 +458,7 @@ class FlutterContacts {
                 var index = mutableMapOf<String, Int>()
 
                 fun getString(col: String): String = cursor.getString(cursor.getColumnIndex(col)) ?: ""
-                fun getInt(col: String): Int = cursor.getInt(cursor.getColumnIndex(col)) ?: 0
+                fun getInt(col: String): Int = cursor.getInt(cursor.getColumnIndex(col))
                 fun getBool(col: String): Boolean = getInt(col) == 1
 
                 while (cursor.moveToNext()) {
@@ -462,7 +473,7 @@ class FlutterContacts {
                         id=id,
                         displayName=getString(RawContacts.DISPLAY_NAME_PRIMARY),
                         isStarred = getBool(RawContacts.STARRED),
-                        accounts = listOf(accountOfContact)
+                        accounts = listOf(accountOfContact),
                     )
 
                     contacts.add(contact)

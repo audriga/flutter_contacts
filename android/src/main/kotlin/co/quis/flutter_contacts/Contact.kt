@@ -28,7 +28,9 @@ data class Contact(
     var events: List<Event> = listOf(),
     var notes: List<Note> = listOf(),
     var accounts: List<Account> = listOf(),
-    var groups: List<Group> = listOf()
+    var groups: List<Group> = listOf(),
+    var contactLastUpdatedTimestamp: Int? = null,
+    var sourceId: String? = null
 ) {
     companion object {
         fun fromMap(m: Map<String, Any?>): Contact {
@@ -48,7 +50,9 @@ data class Contact(
                 (m["events"] as List<Map<String, Any?>>).map { Event.fromMap(it) },
                 (m["notes"] as List<Map<String, Any>>).map { Note.fromMap(it) },
                 (m["accounts"] as List<Map<String, Any>>).map { Account.fromMap(it) },
-                (m["groups"] as List<Map<String, Any>>).map { Group.fromMap(it) }
+                (m["groups"] as List<Map<String, Any>>).map { Group.fromMap(it) },
+                m["timestamp"] as Int?,
+                m["sourceId"] as String?,
             )
         }
     }
@@ -69,6 +73,8 @@ data class Contact(
         "events" to events.map { it.toMap() },
         "notes" to notes.map { it.toMap() },
         "accounts" to accounts.map { it.toMap() },
-        "groups" to groups.map { it.toMap() }
+        "groups" to groups.map { it.toMap() },
+        "contactLastUpdatedTimestamp" to contactLastUpdatedTimestamp,
+        "sourceId" to sourceId
     )
 }
