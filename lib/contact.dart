@@ -287,9 +287,9 @@ class Contact {
       'photo=$photo, isStarred=$isStarred, name=$name, phones=$phones, '
       'emails=$emails, addresses=$addresses, organizations=$organizations, '
       'websites=$websites, socialMedias=$socialMedias, events=$events, '
-      'notes=$notes, accounts=$accounts, groups=$groups)'
+      'notes=$notes, accounts=$accounts, groups=$groups, '
       'contactLastUpdatedTimestamp=${contactLastUpdatedTimestamp?.toString()}, '
-      'sourceId=$sourceId';
+      'sourceId=$sourceId)';
 
   /// Inserts the contact into the database.
   Future<Contact> insert() => FlutterContacts.insertContact(this);

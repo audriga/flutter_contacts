@@ -474,7 +474,12 @@ class FlutterContacts {
                         displayName=getString(RawContacts.DISPLAY_NAME_PRIMARY),
                         isStarred = getBool(RawContacts.STARRED),
                         accounts = listOf(accountOfContact),
+                        sourceId = getString(RawContacts.SOURCE_ID)
                     )
+                    // todo get deleted timestamp somehow
+//                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+//                        contact.contactLastUpdatedTimestamp = getInt(CONTACT_DELETED_TIMESTAMP)
+//                    }
 
                     contacts.add(contact)
                 }
@@ -1293,6 +1298,8 @@ class FlutterContacts {
                         "${e.month.toString().padStart(2, '0')}-" +
                         e.day.toString().padStart(2, '0')
 
+            // todo If I am seeing this correctly contact_id is not set
+            // But before I can always just set this to contact.id, first have to make sure that contact.id is always contact_id, and not raw_contact_id.
             fun newInsert(): ContentProviderOperation.Builder =
                 if (rawContactId != null)
                     ContentProviderOperation
