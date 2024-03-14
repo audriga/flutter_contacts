@@ -573,9 +573,17 @@ class FlutterContacts {
             return totalRowsUpdated
         }
 
+
+        // From  https://github.com/bitfireAT/vcard4android/blob/a0eabb85e953f0b66644bcff45d787cc19c974d5/lib/src/main/java/at/bitfire/vcard4android/Utils.kt#L26
+        private fun Uri.asSyncAdapter(account: Account): Uri = buildUpon()
+            .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
+            .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
+            .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true").build()
+
         fun insert(
             resolver: ContentResolver,
-            contactMap: Map<String, Any?>
+            contactMap: Map<String, Any?>,
+            callerIsSyncAdapter: Boolean = false // todo not yet implemented correctly
         ): Map<String, Any?>? {
             val ops = mutableListOf<ContentProviderOperation>()
 
@@ -589,21 +597,23 @@ class FlutterContacts {
             // option enabled.
             //
             // If an account is provided, use it explicitly instead.
-            if (contact.accounts.isEmpty()) {
-                ops.add(
+            val insertOperationBuilder: ContentProviderOperation.Builder =
+                if (contact.accounts.isEmpty()) {
                     ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
                         .withValue(RawContacts.ACCOUNT_TYPE, null)
                         .withValue(RawContacts.ACCOUNT_NAME, null)
-                        .build()
-                )
-            } else {
-                ops.add(
+//                }
+//                // todo: this causes a crash...
+//                else if (callerIsSyncAdapter) {
+//                    ContentProviderOperation.newInsert(RawContacts.CONTENT_URI.asSyncAdapter(contact.accounts.first()))
+//                    // todo: Only adding the CALLER_IS_SYNCADAPTER parameter to the insert operation that creates the contact might not be enough
+                } else {
                     ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
                         .withValue(RawContacts.ACCOUNT_TYPE, contact.accounts.first().type)
                         .withValue(RawContacts.ACCOUNT_NAME, contact.accounts.first().name)
-                        .build()
-                )
-            }
+                }
+
+            ops.add(insertOperationBuilder.build())
 
             // Build all properties.
             buildOpsForContact(contact, ops)
@@ -623,9 +633,9 @@ class FlutterContacts {
             val contentValues = ContentValues()
             contentValues.put(ContactsContract.RawContacts.STARRED, if (contact.isStarred) 1 else 0)
             resolver.update(
-                ContactsContract.RawContacts.CONTENT_URI,
-                contentValues,
-                ContactsContract.RawContacts._ID + "=?",
+                /* uri = */ ContactsContract.RawContacts.CONTENT_URI,
+                /* values = */ contentValues,
+                /* where = */ ContactsContract.RawContacts._ID + "=?",
                 /*selectionArgs=*/arrayOf(rawId.toString())
             )
 
@@ -634,14 +644,14 @@ class FlutterContacts {
             val insertedContacts: List<Map<String, Any?>> = select(
                 resolver,
                 rawId.toString(),
-                /*withProperties=*/ true,
-                /*withThumbnail=*/true,
-                /*withPhoto=*/true,
-                /*withGroups=*/false, // slower, usually not needed
-                /*withAccounts=*/true,
-                /*returnUnifiedContacts=*/true, //
-                /*includeNonVisible=*/true,
-                /*idIsRawContactId=*/true
+                withProperties = true,
+                withThumbnail = true,
+                withPhoto = true,
+                withGroups = false, // slower, usually not needed
+                withAccounts = true,
+                returnUnifiedContacts = true,
+                includeNonVisible = true,
+                idIsRawContactId = true
             )
 
             if (insertedContacts.isEmpty()) {
@@ -736,14 +746,14 @@ class FlutterContacts {
             val updatedContacts: List<Map<String, Any?>> = select(
                 resolver,
                 rawContactId,
-                /*withProperties=*/ true,
-                /*withThumbnail=*/true,
-                /*withPhoto=*/true,
-                /*withGroups=*/false, // slower, usually not needed
-                /*withAccounts=*/true,
-                /*returnUnifiedContacts=*/true,
-                /*includeNonVisible=*/true,
-                /*idIsRawContactId=*/true
+                withProperties = true,
+                withThumbnail = true,
+                withPhoto = true,
+                withGroups = false, // slower, usually not needed
+                withAccounts = true,
+                returnUnifiedContacts = true,
+                includeNonVisible = true,
+                idIsRawContactId = true
             )
 
             if (updatedContacts.isEmpty()) {
@@ -752,10 +762,18 @@ class FlutterContacts {
             return updatedContacts[0]
         }
 
+//        private fun syncAdapterURI(uri: Uri) = uri.buildUpon()
+//        private fun rawContactSyncURI(id: Long): Uri {
+//            return syncAdapterURI(ContentUris.withAppendedId(RawContacts.CONTENT_URI, id)).build()
+//        }
+//
+//        private fun dataSyncURI() = syncAdapterURI(Data.CONTENT_URI)
+
         fun updateRaw(
             resolver: ContentResolver,
             contactMap: Map<String, Any?>,
-            withGroups: Boolean
+            withGroups: Boolean,
+            callerIsSyncAdapter: Boolean = false //todo not yet implemented
         ): Map<String, Any?>? {
             fun ContentValues.putStringOrNull(key: String, value: String) {
                 if (value.isNotEmpty()) put(key, value) else putNull(key)
@@ -763,6 +781,12 @@ class FlutterContacts {
             val ops = mutableListOf<ContentProviderOperation>()
 
             val contact = Contact.fromMap(contactMap)
+
+//
+//            if (callerIsSyncAdapter) {
+//                val insertOperationBuilder: ContentProviderOperation.Builder =  ContentProviderOperation.newInsert(RawContacts.CONTENT_URI.asSyncAdapter(contact.accounts.first()))
+//                ops.add(insertOperationBuilder.build())
+//            }
 
             val rawContactId = contact.id
             assert(rawContactId == contact.accounts.first().rawId) { "Id should be RawId" }

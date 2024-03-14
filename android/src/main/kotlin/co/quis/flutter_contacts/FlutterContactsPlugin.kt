@@ -313,8 +313,10 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                 coroutineScope.launch(Dispatchers.IO) {
                     val args = call.arguments as List<Any>
                     val contact = args[0] as Map<String, Any>
+                    // includeNotesOnIos13AndAbove = args[1]
+                    val callerIsSyncAdapter = args[2] as Boolean? ?: false
                     val insertedContact: Map<String, Any?>? =
-                        FlutterContacts.insert(resolver!!, contact)
+                        FlutterContacts.insert(resolver!!, contact, callerIsSyncAdapter)
                     coroutineScope.launch(Dispatchers.Main) {
                         if (insertedContact != null) {
                             result.success(insertedContact)
@@ -345,8 +347,10 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                     val args = call.arguments as List<Any>
                     val contact = args[0] as Map<String, Any>
                     val withGroups = args[1] as Boolean
+                    // includeNotesOnIos13AndAbove = args[2]
+                    val callerIsSyncAdapter = args[3] as Boolean? ?: false
                     val updatedContact: Map<String, Any?>? =
-                        FlutterContacts.updateRaw(resolver!!, contact, withGroups)
+                        FlutterContacts.updateRaw(resolver!!, contact, withGroups, callerIsSyncAdapter)
                     coroutineScope.launch(Dispatchers.Main) {
                         if (updatedContact != null) {
                             result.success(updatedContact)

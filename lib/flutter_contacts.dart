@@ -221,6 +221,7 @@ class FlutterContacts {
     final json = await _channel.invokeMethod('insert', [
       contact.toJson(),
       config.includeNotesOnIos13AndAbove,
+      config.behaveAsSyncAdapter,
     ]);
     return Contact.fromJson(Map<String, dynamic>.from(json));
   }
@@ -293,6 +294,7 @@ class FlutterContacts {
       contact.toJson(),
       withGroups,
       config.includeNotesOnIos13AndAbove,
+      config.behaveAsSyncAdapter,
     ]);
     return Contact.fromJson(Map<String, dynamic>.from(json));
   }

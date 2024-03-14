@@ -44,4 +44,11 @@ class FlutterContactsConfig {
   /// The vCard version to use when exporting to VCard. V4 is the most current,
   /// but V3 is the most commonly supported.
   VCardVersion vCardVersion = VCardVersion.v3;
+
+  /// Tells the android system that the caller is a sync adapter.
+  /// This means dirty/ deleted flags won't be set, this means sync providers like Google
+  /// won't "know" that something changed. But if you sync the changes yourself this might
+  /// be what you want.
+  /// Note: Not fully tested or even implemented yet.
+  bool behaveAsSyncAdapter = false;
 }
