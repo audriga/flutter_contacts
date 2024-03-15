@@ -34,6 +34,7 @@ class FlutterContacts {
   static final _numeric = RegExp(r'\p{Number}', unicode: true);
   static const String _KeyAccount = 'account_map';
   static const String _KeyRawContactIds = 'raw_contact_ids';
+  static const String _KeyRawContactId = 'raw_contact_id';
   static const String _KeyId = 'id';
   static const String _KeyWithProperties = 'with_properties';
   static const String _KeyWithThumbnail = 'with_thumbnail';
@@ -43,6 +44,9 @@ class FlutterContacts {
   static const String _KeyReturnUnifiedContacts = 'return_unified_contacts';
   static const String _KeyIncludeNonVisible = 'include_non_visible';
   static const String _KeyIdIsRawContactId = 'id_is_raw_contact_od';
+  static const String _KeyMimetype = 'mimetype';
+  static const String _KeyProjection = 'projection';
+  static const String _KeyRowContentMap = 'row_content_map';
 
   /// Plugin configuration.
   static var config = FlutterContactsConfig();
@@ -407,6 +411,42 @@ class FlutterContacts {
     return linesChanged;
   }
 
+  static Future<List<Map<String, dynamic>>> queryCustomDataRows({
+    required String rawContactId,
+    required String mimeType,
+    List<String>? projection,
+  }) async {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    if (rawContactId.isEmpty) throw Exception('rawContactId is empty!');
+    List untypedDataRows = await _channel.invokeMethod(
+      'queryCustomDataRows',
+      {
+        _KeyRawContactId: rawContactId,
+        _KeyMimetype: mimeType,
+        _KeyProjection: projection,
+      },
+    );
+    var dataRows = untypedDataRows
+        .map((x) => Map<String, dynamic>.from(x)).toList();
+    return dataRows;
+  }
+
+  static Future<void> insertCustomDataRow({
+    required String rawContactId,
+    required String mimeType,
+    required Map<String, dynamic> rowContentMap,
+  }) {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    return _channel.invokeMethod<void>(
+      'insertCustomDataRow',
+      {
+        _KeyRawContactId: rawContactId,
+        _KeyMimetype: mimeType,
+        _KeyRowContentMap: rowContentMap,
+      },
+    );
+  }
+
   /// Listens to contact database changes.
   ///
   /// Because of limitations both on iOS and on Android (see
@@ -565,7 +605,7 @@ class FlutterContacts {
       ..propertiesFetched = withProperties
       ..thumbnailFetched = withThumbnail
       ..photoFetched = withPhoto
-      ..isUnified = config.returnUnifiedContacts);
+      ..isUnified = returnUnifiedContacts?? config.returnUnifiedContacts);
     return contacts;
   }
 

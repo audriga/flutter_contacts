@@ -189,10 +189,10 @@ class FlutterContacts {
 
             // Query contact database.
             val cursor = resolver.query(
-                uriWithQueryParameters.build(),
-                projection.toTypedArray(),
-                selection,
-                selectionArgs,
+                /* uri = */ uriWithQueryParameters.build(),
+                /* projection = */ projection.toTypedArray(),
+                /* selection = */ selection,
+                /* selectionArgs = */ selectionArgs,
                 /*sortOrder=*/null
             )
 
@@ -603,7 +603,7 @@ class FlutterContacts {
                         .withValue(RawContacts.ACCOUNT_TYPE, null)
                         .withValue(RawContacts.ACCOUNT_NAME, null)
 //                }
-//                // todo: this causes a crash...
+//                // todo: the following commented out code causes a crash...
 //                else if (callerIsSyncAdapter) {
 //                    ContentProviderOperation.newInsert(RawContacts.CONTENT_URI.asSyncAdapter(contact.accounts.first()))
 //                    // todo: Only adding the CALLER_IS_SYNCADAPTER parameter to the insert operation that creates the contact might not be enough
@@ -631,11 +631,11 @@ class FlutterContacts {
 
             // Update starred status.
             val contentValues = ContentValues()
-            contentValues.put(ContactsContract.RawContacts.STARRED, if (contact.isStarred) 1 else 0)
+            contentValues.put(RawContacts.STARRED, if (contact.isStarred) 1 else 0)
             resolver.update(
-                /* uri = */ ContactsContract.RawContacts.CONTENT_URI,
+                /* uri = */ RawContacts.CONTENT_URI,
                 /* values = */ contentValues,
-                /* where = */ ContactsContract.RawContacts._ID + "=?",
+                /* where = */ RawContacts._ID + "=?",
                 /*selectionArgs=*/arrayOf(rawId.toString())
             )
 
@@ -733,11 +733,11 @@ class FlutterContacts {
 
             // Update starred status.
             val contentValues = ContentValues()
-            contentValues.put(ContactsContract.Contacts.STARRED, if (contact.isStarred) 1 else 0)
+            contentValues.put(Contacts.STARRED, if (contact.isStarred) 1 else 0)
             resolver.update(
-                ContactsContract.Contacts.CONTENT_URI,
+                Contacts.CONTENT_URI,
                 contentValues,
-                ContactsContract.Contacts._ID + "=?",
+                Contacts._ID + "=?",
                 /*selectionArgs=*/arrayOf(contactId)
             )
 
@@ -887,6 +887,109 @@ class FlutterContacts {
                 return null
             }
             return updatedContacts[0]
+        }
+
+        /**
+         * Inserts a custom data row in the Contacts Data Table.
+         *
+         * @param resolver Needed to access the content model.
+         * @param mimeType The mimeType of your custom data row.
+         * @param rawContactId the raw_contact_id of your contact. Not to be confused with the contact_id.
+         */
+        fun insertCustomDataRow(
+            resolver: ContentResolver,
+            rawContactId: String,
+            // todo: do i also need common properties like display_name contact_id
+            mimeType: String,
+            rowContentMap: Map<String, Any?>,
+        ) {
+            fun newInsert(): ContentProviderOperation.Builder = ContentProviderOperation
+                .newInsert(Data.CONTENT_URI)
+                .withValue(Data.RAW_CONTACT_ID, rawContactId)
+
+            val ops = mutableListOf<ContentProviderOperation>()
+//            val contact = Contact.fromMap(contactMap)
+            // is this operation needed here?
+//            val insertOperationBuilderAccount: ContentProviderOperation.Builder =
+//                ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
+//                    .withValue(RawContacts.ACCOUNT_TYPE, contact.accounts.first().type)
+//                    .withValue(RawContacts.ACCOUNT_NAME, contact.accounts.first().name)
+//            ops.add(insertOperationBuilderAccount.build())
+
+
+            val insertOperationBuilder: ContentProviderOperation.Builder = newInsert()
+                .withValue(Data.MIMETYPE, mimeType)
+            rowContentMap.forEach { (rowName, value) ->
+                insertOperationBuilder.withValue(
+                    rowName,
+                    value
+                )
+            }
+            ops.add(insertOperationBuilder.build())
+
+            // Save.
+            val addContactResults =
+                resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
+            val rawId: Long = ContentUris.parseId(addContactResults[0].uri!!)
+        }
+
+        /**
+         * Query the contents of custom data rows.
+         *
+         * @param resolver Needed to access the content model.
+         * @param mimeType The mimeType of your custom data row.
+         * @param rawContactId the raw_contact_id of your contact. Not to be confused with the contact_id.
+         * @param projection A list of which columns to return. Passing null will return all columns,
+         * which is inefficient (but should be fine since we're only accessing one row anyways).
+         * @return A list of maps representing the data rows matching mimeType and raw_contact_id. Maps column names to cell values.
+         */
+        fun queryCustomDataRows (
+            resolver: ContentResolver,
+            rawContactId: String,
+            mimeType: String,
+            projection: List<String>?,
+        ) : List<Map<String,Any?>> {
+            val selectionClauses = mutableListOf<String>()
+            val selectionArgs = mutableListOf<String>()
+            selectionClauses.add("${Data.MIMETYPE} = ?")
+            selectionArgs.add(mimeType)
+            selectionClauses.add("${Data.RAW_CONTACT_ID} = ?")
+            selectionArgs.add(rawContactId)
+
+            val selection: String =  selectionClauses.joinToString(separator = " AND ")
+
+            // Query contact database.
+            val cursor = resolver.query(
+                /* uri = */ Data.CONTENT_URI,
+                /* projection = */ projection?.toTypedArray(),
+                /* selection = */ selection,
+                /* selectionArgs = */ selectionArgs.toTypedArray(),
+                /*sortOrder=*/null
+            ) ?: return listOf(mapOf())
+            val dataRows = mutableListOf<MutableMap<String, Any?>>()
+            while (cursor.moveToNext()) {
+                val dataRow = mutableMapOf<String, Any?>()
+
+                val columnCount = cursor.columnCount
+                for (i: Int in 0 until columnCount) {
+                    val columnName = cursor.getColumnName(i)
+                    val type = cursor.getType(i)
+                    when (type) {
+                        // not entirely sure if we also have to worry about
+                        // getDouble, getLong, getShort, or if those are just convenience methods.
+                        Cursor.FIELD_TYPE_NULL -> dataRow[columnName] = null
+                        Cursor.FIELD_TYPE_INTEGER -> dataRow[columnName] = cursor.getInt(i)
+                        Cursor.FIELD_TYPE_FLOAT -> dataRow[columnName] = cursor.getFloat(i)
+                        Cursor.FIELD_TYPE_STRING -> dataRow[columnName] = cursor.getString(i)
+                        Cursor.FIELD_TYPE_BLOB -> dataRow[columnName] = cursor.getBlob(i)
+                    }
+
+                }
+                dataRows.add(dataRow)
+            }
+
+            cursor.close()
+            return dataRows
         }
 
         fun delete(resolver: ContentResolver, contactIds: List<String>) {

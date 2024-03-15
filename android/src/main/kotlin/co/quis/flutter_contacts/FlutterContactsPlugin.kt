@@ -39,6 +39,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
 
         private const val ACCOUNT_PARAMETER = "account_map"
         private const val RAW_CONTACT_IDS_PARAMETER = "raw_contact_ids"
+        private const val RAW_CONTACT_ID_PARAMETER = "raw_contact_id"
         private const val ID_PARAMETER = "id"
         private const val WITH_PROPERTIES_PARAMETER = "with_properties"
         private const val WITH_THUMBNAIL_PARAMETER = "with_thumbnail"
@@ -48,7 +49,9 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
         private const val RETURN_UNIFIED_CONTACTS_PARAMETER = "return_unified_contacts"
         private const val INCLUDE_NON_VISIBLE_PARAMETER = "include_non_visible"
         private const val ID_IS_RAW_CONTACT_ID_PARAMETER = "id_is_raw_contact_od"
-
+        private const val MIMETYPE_PARAMETER = "mimetype"
+        private const val PROJECTION_PARAMETER = "projection"
+        private const val ROW_CONTENT_MAP_PARAMETER = "row_content_map"
     }
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -272,6 +275,53 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                             accountMap = accountMap
                         )
                     coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
+                }
+            /**
+             * Query the contents of custom data rows.
+             * See also doc of [FlutterContacts.queryCustomDataRows].
+              */
+            "queryCustomDataRows" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val rawContactId = call.argument<String>(RAW_CONTACT_ID_PARAMETER)
+                    val mimeType = call.argument<String>(MIMETYPE_PARAMETER)
+                    val projection = call.argument<List<String>?>(PROJECTION_PARAMETER)
+
+                    if (rawContactId != null && mimeType != null) {
+                        val customDataRows: List<Map<String, Any?>> =
+                            FlutterContacts.queryCustomDataRows(
+                                resolver = resolver!!,
+                                rawContactId = rawContactId,
+                                mimeType = mimeType,
+                                projection = projection,
+                            )
+                        coroutineScope.launch(Dispatchers.Main) { result.success(customDataRows) }
+                    } else {
+                        coroutineScope.launch(Dispatchers.Main) { result.error("", "One of the required parameters was null", "") }
+                    }
+                }
+            /**
+             * Query the contents of custom data rows.
+             * See also doc of [FlutterContacts.insertCustomDataRow].
+             */
+            "insertCustomDataRow" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val rawContactId = call.argument<String>(RAW_CONTACT_ID_PARAMETER)
+                    val mimeType = call.argument<String>(MIMETYPE_PARAMETER)
+                    val rowContentMap = call.argument<HashMap<String, Any>?>(ROW_CONTENT_MAP_PARAMETER)
+
+
+                    if (rawContactId != null && mimeType != null && rowContentMap != null) {
+                        FlutterContacts.insertCustomDataRow(
+                            resolver = resolver!!,
+                            rawContactId = rawContactId,
+                            mimeType = mimeType,
+                            rowContentMap = rowContentMap,
+                            )
+                        coroutineScope.launch(Dispatchers.Main) { result.success(null) }
+                    } else {
+                        coroutineScope.launch(Dispatchers.Main) { result.error("", "One of the required parameters was null", "") }
+                    }
+                    
                 }
             // Gets all "soft deleted" contacts for a given account
             "queryDeleted" ->
