@@ -573,12 +573,19 @@ class FlutterContacts {
             return totalRowsUpdated
         }
 
+        private fun addCallerIsSyncAdapterParameter(uri: Uri, isSyncOperation: Boolean): Uri {
+            return if (isSyncOperation) {
+                uri.buildUpon()
+                    .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
+                    .build()
+            } else uri
+        }
 
         // From  https://github.com/bitfireAT/vcard4android/blob/a0eabb85e953f0b66644bcff45d787cc19c974d5/lib/src/main/java/at/bitfire/vcard4android/Utils.kt#L26
-        private fun Uri.asSyncAdapter(account: Account): Uri = buildUpon()
-            .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
-            .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
-            .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true").build()
+        private fun Uri.asSyncAdapter(isSyncOperation: Boolean): Uri =
+            if (isSyncOperation) buildUpon().appendQueryParameter(
+                ContactsContract.CALLER_IS_SYNCADAPTER, "true"
+            ).build() else this
 
         fun insert(
             resolver: ContentResolver,
@@ -602,21 +609,18 @@ class FlutterContacts {
                     ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
                         .withValue(RawContacts.ACCOUNT_TYPE, null)
                         .withValue(RawContacts.ACCOUNT_NAME, null)
-//                }
-//                // todo: the following commented out code causes a crash...
-//                else if (callerIsSyncAdapter) {
-//                    ContentProviderOperation.newInsert(RawContacts.CONTENT_URI.asSyncAdapter(contact.accounts.first()))
-//                    // todo: Only adding the CALLER_IS_SYNCADAPTER parameter to the insert operation that creates the contact might not be enough
-                } else {
-                    ContentProviderOperation.newInsert(RawContacts.CONTENT_URI)
-                        .withValue(RawContacts.ACCOUNT_TYPE, contact.accounts.first().type)
-                        .withValue(RawContacts.ACCOUNT_NAME, contact.accounts.first().name)
+                }
+                else {
+                    val account = contact.accounts.first()
+                    ContentProviderOperation.newInsert(RawContacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
+                        .withValue(RawContacts.ACCOUNT_TYPE, account.type)
+                        .withValue(RawContacts.ACCOUNT_NAME, account.name)
                 }
 
             ops.add(insertOperationBuilder.build())
 
             // Build all properties.
-            buildOpsForContact(contact, ops)
+            buildOpsForContact(contact, ops, callerIsSyncAdapter = callerIsSyncAdapter)
 
             // Save.
             val addContactResults =
@@ -626,14 +630,14 @@ class FlutterContacts {
             // Add photo if provided (needs to be after saving the contact so we know
             // its raw contact ID).
             if (contact.photo != null) {
-                buildOpsForPhoto(resolver, contact.photo!!, ops, rawId)
+                buildOpsForPhoto(resolver, contact.photo!!, ops, rawId, callerIsSyncAdapter = callerIsSyncAdapter)
             }
 
             // Update starred status.
             val contentValues = ContentValues()
             contentValues.put(RawContacts.STARRED, if (contact.isStarred) 1 else 0)
             resolver.update(
-                /* uri = */ RawContacts.CONTENT_URI,
+                /* uri = */ RawContacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter),
                 /* values = */ contentValues,
                 /* where = */ RawContacts._ID + "=?",
                 /*selectionArgs=*/arrayOf(rawId.toString())
@@ -1417,7 +1421,8 @@ class FlutterContacts {
         private fun buildOpsForContact(
             contact: Contact,
             ops: MutableList<ContentProviderOperation>,
-            rawContactId: String? = null
+            rawContactId: String? = null,
+            callerIsSyncAdapter: Boolean = false
         ) {
             fun emptyToNull(s: String): String? = s.ifEmpty { null }
             fun eventToDate(e: PEvent): String =
@@ -1430,11 +1435,11 @@ class FlutterContacts {
             fun newInsert(): ContentProviderOperation.Builder =
                 if (rawContactId != null)
                     ContentProviderOperation
-                        .newInsert(Data.CONTENT_URI)
+                        .newInsert(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
                         .withValue(Data.RAW_CONTACT_ID, rawContactId)
                 else
                     ContentProviderOperation
-                        .newInsert(Data.CONTENT_URI)
+                        .newInsert(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
                         .withValueBackReference(Data.RAW_CONTACT_ID, 0)
 
             val name: PName = contact.name
@@ -1576,10 +1581,12 @@ class FlutterContacts {
             resolver: ContentResolver,
             photo: ByteArray,
             ops: MutableList<ContentProviderOperation>,
-            rawContactId: Long
+            rawContactId: Long,
+            callerIsSyncAdapter: Boolean = false,
+
         ) {
             val photoUri: Uri = Uri.withAppendedPath(
-                ContentUris.withAppendedId(RawContacts.CONTENT_URI, rawContactId),
+                ContentUris.withAppendedId(RawContacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter), rawContactId),
                 RawContacts.DisplayPhoto.CONTENT_DIRECTORY
             )
             var fd: AssetFileDescriptor? = resolver.openAssetFileDescriptor(photoUri, "rw")
