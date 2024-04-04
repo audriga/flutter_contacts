@@ -47,6 +47,7 @@ class FlutterContacts {
   static const String _KeyMimetype = 'mimetype';
   static const String _KeyProjection = 'projection';
   static const String _KeyRowContentMap = 'row_content_map';
+  static const String _KeyCallerIsSyncadapter = 'caller_is_syncadapter';
 
   /// Plugin configuration.
   static var config = FlutterContactsConfig();
@@ -232,11 +233,13 @@ class FlutterContacts {
 
   /// Updates existing contact and returns it.
   ///
+  /// Note that on Android this deletes a set of properties for all raw contacts contributing
+  /// to the unified contact and re-insets them only for the first raw Contact.
+  /// Use [updateRawContact] instead
+  ///
   /// Note that output contact may be different from the input. If you intend to
   /// perform operations on the contact after update, you should perform them on
   /// the output rather than on the input.
-  /// Note that on Android this deletes a set of properties for all raw contacts contributing
-  /// to the unified contact and re-insets them only for the first raw Contact.
   static Future<Contact> updateContact(
     Contact contact, {
     bool withGroups = false,
@@ -275,6 +278,8 @@ class FlutterContacts {
 
   /// Updates existing raw contact and returns it.
   /// Android only.
+  /// Note that this cannot update the starred status, as this information is
+  /// tracked in the "contacts" table, which combines multiple raw contacts
   static Future<Contact> updateRawContact(
     Contact contact, {
     bool withGroups = false,
@@ -304,6 +309,8 @@ class FlutterContacts {
   }
 
   /// Deletes contacts from the database.
+  /// Note that for every unified contact in this list, this will delete all
+  /// corresponding raw contacts
   static Future<void> deleteContacts(List<Contact> contacts) async {
     final ids = contacts.map((c) => c.id).toList();
     if (ids.any((x) => x.isEmpty)) {
@@ -326,7 +333,12 @@ class FlutterContacts {
     if (contacts.any((x) => !x.isRaw)) {
       throw Exception('This function can only delete raw contacts');
     }
-    await _channel.invokeMethod('delete', ids);
+    if (config.behaveAsSyncAdapter) {
+      await _channel.invokeMethod('deleteRawSync', ids);
+    } else {
+      await _channel.invokeMethod('deleteRaw', ids);
+    }
+
   }
 
   /// Deletes one contact from the database.
@@ -431,10 +443,17 @@ class FlutterContacts {
     return dataRows;
   }
 
+  /// Inserts a custom data row in the Contacts Data Table. Android only.
+  /// [rawContactId] the raw_contact_id of your contact. Not to be confused with the contact_id.
+  /// [mimeType] The mimeType of your custom data row.
+  /// [rowContentMap] is the actual data to insert. Keys denote the column, and must come from  [ContactsContract.DataColumns](https://android.googlesource.com/platform/frameworks/base/+/HEAD/core/java/android/provider/ContactsContract.java#4305)
+  /// and values are the data you want to set the cell to.
+  /// [behaveAsSyncAdapter] optionally override [FlutterContactsConfig.behaveAsSyncAdapter]
   static Future<void> insertCustomDataRow({
     required String rawContactId,
     required String mimeType,
     required Map<String, dynamic> rowContentMap,
+    bool? behaveAsSyncAdapter
   }) {
     if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
     return _channel.invokeMethod<void>(
@@ -443,6 +462,7 @@ class FlutterContacts {
         _KeyRawContactId: rawContactId,
         _KeyMimetype: mimeType,
         _KeyRowContentMap: rowContentMap,
+        _KeyCallerIsSyncadapter: behaveAsSyncAdapter ?? config.behaveAsSyncAdapter,
       },
     );
   }

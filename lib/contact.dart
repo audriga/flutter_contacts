@@ -295,11 +295,14 @@ class Contact {
   Future<Contact> insert() => FlutterContacts.insertContact(this);
 
   /// Updates the contact in the database.
-  Future<Contact> update({bool withGroups = false}) =>
+  Future<Contact> update({bool withGroups = false}) => isRaw?
+      FlutterContacts.updateRawContact(this, withGroups: withGroups):
       FlutterContacts.updateContact(this, withGroups: withGroups);
 
   /// Deletes the contact from the database.
-  Future<void> delete() => FlutterContacts.deleteContact(this);
+  Future<void> delete() => isRaw?
+      FlutterContacts.deleteRawContacts([this]):
+      FlutterContacts.deleteContact(this);
 
   /// Exports to vCard format.
   ///

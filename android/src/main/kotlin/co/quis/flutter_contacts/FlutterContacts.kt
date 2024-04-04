@@ -573,15 +573,7 @@ class FlutterContacts {
             return totalRowsUpdated
         }
 
-        private fun addCallerIsSyncAdapterParameter(uri: Uri, isSyncOperation: Boolean): Uri {
-            return if (isSyncOperation) {
-                uri.buildUpon()
-                    .appendQueryParameter(ContactsContract.CALLER_IS_SYNCADAPTER, "true")
-                    .build()
-            } else uri
-        }
-
-        // From  https://github.com/bitfireAT/vcard4android/blob/a0eabb85e953f0b66644bcff45d787cc19c974d5/lib/src/main/java/at/bitfire/vcard4android/Utils.kt#L26
+        // Based on  https://github.com/bitfireAT/vcard4android/blob/a0eabb85e953f0b66644bcff45d787cc19c974d5/lib/src/main/java/at/bitfire/vcard4android/Utils.kt#L26
         private fun Uri.asSyncAdapter(isSyncOperation: Boolean): Uri =
             if (isSyncOperation) buildUpon().appendQueryParameter(
                 ContactsContract.CALLER_IS_SYNCADAPTER, "true"
@@ -590,7 +582,7 @@ class FlutterContacts {
         fun insert(
             resolver: ContentResolver,
             contactMap: Map<String, Any?>,
-            callerIsSyncAdapter: Boolean = false // todo not yet implemented correctly
+            callerIsSyncAdapter: Boolean = false
         ): Map<String, Any?>? {
             val ops = mutableListOf<ContentProviderOperation>()
 
@@ -786,12 +778,6 @@ class FlutterContacts {
 
             val contact = Contact.fromMap(contactMap)
 
-//
-//            if (callerIsSyncAdapter) {
-//                val insertOperationBuilder: ContentProviderOperation.Builder =  ContentProviderOperation.newInsert(RawContacts.CONTENT_URI.asSyncAdapter(contact.accounts.first()))
-//                ops.add(insertOperationBuilder.build())
-//            }
-
             val rawContactId = contact.id
             assert(rawContactId == contact.accounts.first().rawId) { "Id should be RawId" }
 
@@ -805,7 +791,7 @@ class FlutterContacts {
 
 
             ops.add(
-                ContentProviderOperation.newDelete(Data.CONTENT_URI)
+                ContentProviderOperation.newDelete(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
                     .withSelection(
                         "${Data.RAW_CONTACT_ID}=? and ${Data.MIMETYPE} in (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         arrayOf(
@@ -826,7 +812,7 @@ class FlutterContacts {
             )
             if (contact.photo == null && contact.thumbnail == null) {
                 ops.add(
-                    ContentProviderOperation.newDelete(Data.CONTENT_URI)
+                    ContentProviderOperation.newDelete(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
                         .withSelection(
                             "${Data.RAW_CONTACT_ID}=? and ${Data.MIMETYPE}=?",
                             arrayOf(
@@ -841,7 +827,7 @@ class FlutterContacts {
             // todo Groups are only deleted when withGroups flag is true. However groups are always inserted, irregardless of that flag.
             if (withGroups) {
                 ops.add(
-                    ContentProviderOperation.newDelete(Data.CONTENT_URI)
+                    ContentProviderOperation.newDelete(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
                         .withSelection(
                             "${Data.RAW_CONTACT_ID}=? and ${Data.MIMETYPE}=?",
                             arrayOf(
@@ -854,23 +840,26 @@ class FlutterContacts {
             }
 
             //todo Is deleting and reinserting the photo on every change really the only way of doing this
-            buildOpsForContact(contact, ops, rawContactId)
+            buildOpsForContact(contact, ops, rawContactId, callerIsSyncAdapter = callerIsSyncAdapter)
             if (contact.photo != null) {
-                buildOpsForPhoto(resolver, contact.photo!!, ops, rawContactId.toLong())
+                buildOpsForPhoto(resolver, contact.photo!!, ops, rawContactId.toLong(), callerIsSyncAdapter = callerIsSyncAdapter)
             }
 
             // Save.
             resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
 
-            // Update starred status. Note: This is only for this raw contact which might lead to the contact not being shown as starred/un-starred in the contacts app.
-            val contentValues = ContentValues()
-            contentValues.put(Contacts.STARRED, if (contact.isStarred) 1 else 0)
-            resolver.update(
-                Contacts.CONTENT_URI,
-                contentValues,
-                Data.RAW_CONTACT_ID + "=?",
-                /*selectionArgs=*/arrayOf(rawContactId)
-            )
+            // Update starred status. 
+            // can only set starred status in the table of unified contacts (Contacts)
+            // todo: Refactor so that raw contacts will have both contact_id and raw_contact_id
+            //   and create a new update starred method that updates the starred status and doesn't touch anything else.
+//            val contentValues = ContentValues()
+//            contentValues.put(Contacts.STARRED, if (contact.isStarred) 1 else 0)
+//            resolver.update(
+//                Contacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter),
+//                contentValues,
+//                Data.RAW_CONTACT_ID + "=?",
+//                /*selectionArgs=*/arrayOf(rawContactId)
+//            )
 
             // Load contacts with that raw ID, which will give us the full contact as it
             // was saved.
@@ -899,16 +888,19 @@ class FlutterContacts {
          * @param resolver Needed to access the content model.
          * @param mimeType The mimeType of your custom data row.
          * @param rawContactId the raw_contact_id of your contact. Not to be confused with the contact_id.
+         * @param rowContentMap is the actual data to insert. Keys denote the column, and must come from [ContactsContract.DataColumns]
+         * values are the data you want to set the cell to
+         * Common properties like display_name contact_id are automatically set by the android system
          */
         fun insertCustomDataRow(
             resolver: ContentResolver,
             rawContactId: String,
-            // todo: do i also need common properties like display_name contact_id
             mimeType: String,
             rowContentMap: Map<String, Any?>,
+            callerIsSyncAdapter: Boolean = false,
         ) {
             fun newInsert(): ContentProviderOperation.Builder = ContentProviderOperation
-                .newInsert(Data.CONTENT_URI)
+                .newInsert(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
                 .withValue(Data.RAW_CONTACT_ID, rawContactId)
 
             val ops = mutableListOf<ContentProviderOperation>()
@@ -1009,13 +1001,18 @@ class FlutterContacts {
 
             resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
         }
-        fun deleteRaw(resolver: ContentResolver, rawContactIds: List<String>) {
+        fun deleteRaw(
+            resolver: ContentResolver,
+            rawContactIds: List<String>,
+            callerIsSyncAdapter: Boolean = false
+        ) {
             val ops = mutableListOf<ContentProviderOperation>()
 
             for (rawContactId in rawContactIds) {
                 ops.add(
-                    ContentProviderOperation.newDelete(RawContacts.CONTENT_URI)
-                        .withSelection("${Data.RAW_CONTACT_ID}=?", arrayOf(rawContactId))
+                    ContentProviderOperation.newDelete(RawContacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
+                        // raw_contact_id in the rawContacts table is just _id.
+                        .withSelection("${RawContacts._ID}=?", arrayOf(rawContactId))
                         .build()
                 )
             }

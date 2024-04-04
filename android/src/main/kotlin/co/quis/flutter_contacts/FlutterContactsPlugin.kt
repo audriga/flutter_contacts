@@ -52,6 +52,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
         private const val MIMETYPE_PARAMETER = "mimetype"
         private const val PROJECTION_PARAMETER = "projection"
         private const val ROW_CONTENT_MAP_PARAMETER = "row_content_map"
+        private const val CALLER_IS_SYNCADAPTER_PARAMETER = "caller_is_syncadapter"
     }
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
@@ -308,6 +309,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                     val rawContactId = call.argument<String>(RAW_CONTACT_ID_PARAMETER)
                     val mimeType = call.argument<String>(MIMETYPE_PARAMETER)
                     val rowContentMap = call.argument<HashMap<String, Any>?>(ROW_CONTENT_MAP_PARAMETER)
+                    val callerIsSyncAdapter = call.argument<Boolean>(CALLER_IS_SYNCADAPTER_PARAMETER)
 
 
                     if (rawContactId != null && mimeType != null && rowContentMap != null) {
@@ -316,6 +318,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                             rawContactId = rawContactId,
                             mimeType = mimeType,
                             rowContentMap = rowContentMap,
+                            callerIsSyncAdapter = callerIsSyncAdapter ?: false,
                             )
                         coroutineScope.launch(Dispatchers.Main) { result.success(null) }
                     } else {
@@ -419,6 +422,14 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
             "deleteRaw" ->
                 coroutineScope.launch(Dispatchers.IO) {
                     FlutterContacts.deleteRaw(resolver!!, call.arguments as List<String>)
+                    coroutineScope.launch(Dispatchers.Main) { result.success(null) }
+                }
+            // Deletes raw contacts with given raw_ids as a sync adapter.
+            // This means the contacts will actually be removed, as opposed to a deleted flag in the raw
+            // contacts table.
+            "deleteRawSync" ->
+                coroutineScope.launch(Dispatchers.IO) {
+                    FlutterContacts.deleteRaw(resolver!!, call.arguments as List<String>, callerIsSyncAdapter = true)
                     coroutineScope.launch(Dispatchers.Main) { result.success(null) }
                 }
             // Fetches all groups.
