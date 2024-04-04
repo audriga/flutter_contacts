@@ -592,8 +592,8 @@ class FlutterContacts {
     bool withAccounts = false,
     bool sorted = true,
     bool deduplicateProperties = false,
-    bool? returnUnifiedContacts = false,
-    bool? includeNonVisible = false,
+    bool? returnUnifiedContacts,
+    bool? includeNonVisible,
     bool idIsRawContactId = false,
   }) async {
     if (!Platform.isAndroid) throw Exception('This method is only available on Android. Use _select instead');
