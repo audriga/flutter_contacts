@@ -769,7 +769,7 @@ class FlutterContacts {
             resolver: ContentResolver,
             contactMap: Map<String, Any?>,
             withGroups: Boolean,
-            callerIsSyncAdapter: Boolean = false //todo not yet implemented
+            callerIsSyncAdapter: Boolean = false
         ): Map<String, Any?>? {
             fun ContentValues.putStringOrNull(key: String, value: String) {
                 if (value.isNotEmpty()) put(key, value) else putNull(key)

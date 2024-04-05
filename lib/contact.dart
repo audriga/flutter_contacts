@@ -242,8 +242,8 @@ class Contact {
         'notes': notes.map((x) => x.toJson()).toList(),
         'accounts': accounts.map((x) => x.toJson()).toList(),
         'groups': groups.map((x) => x.toJson()).toList(),
-        'contactLastUpdatedTimestamp': dateTimeToUnixTimestamp(contactLastUpdatedTimestamp),
-        'sourceId': sourceId,
+        if (contactLastUpdatedTimestamp != null) 'contactLastUpdatedTimestamp': dateTimeToUnixTimestamp(contactLastUpdatedTimestamp),
+        if (sourceId != null) 'sourceId': sourceId,
       });
 
   @override

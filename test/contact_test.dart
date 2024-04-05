@@ -13,14 +13,16 @@ void main() {
   });
 
   test('add phone numbers', () async {
-    const MethodChannel('github.com/QuisApp/flutter_contacts')
-        .setMockMethodCallHandler((MethodCall methodCall) async {
+    const channel = MethodChannel('github.com/QuisApp/flutter_contacts');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
       if (methodCall.method == 'insert') {
         final c = methodCall.arguments[0];
         c['displayName'] = '${c['name']['first']} ${c['name']['last']}';
         c['id'] = '12345';
         return c;
       }
+      return null;
     });
     final newContact = Contact()
       ..name = Name(first: 'John', last: 'Doe')
