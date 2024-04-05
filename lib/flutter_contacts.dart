@@ -177,7 +177,7 @@ class FlutterContacts {
       deduplicateProperties: deduplicateProperties,
     );
     if (contacts.length != 1) return null;
-    return contacts.first;
+    return contacts.singleOrNull;
   }
 
   static Future<Contact?> getRawContactByRawId(
@@ -199,7 +199,7 @@ class FlutterContacts {
       deduplicateProperties: false,
       idIsRawContactId: true,
     );
-    return contacts.single;
+    return contacts.singleOrNull;
   }
 
   /// Inserts a new [contact] in the database and returns it.
