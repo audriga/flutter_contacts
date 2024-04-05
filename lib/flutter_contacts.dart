@@ -180,13 +180,21 @@ class FlutterContacts {
     return contacts.singleOrNull;
   }
 
+  /// Returns exactly one raw contact, matching the given raw_contact_id.
+  /// If there is no such Contact the future will resolve to null
+  ///
+  /// If [includeUnifiedId] a unified contact, containing just this
+  /// raw contact will be returned. This means Contact will have contact_id in its
+  /// [Contact.id] field, and [Contact.isUnified] set to true.
+  /// [Contact.accounts.single.rawId] will always contain the raw_contact_id.
   static Future<Contact?> getRawContactByRawId(
     String rawContactId, {
-    bool withProperties = true,
-    bool withThumbnail = true,
-    bool withPhoto = true,
-    bool withGroups = false,
-    bool withAccounts = true,
+      bool withProperties = true,
+        bool withThumbnail = true,
+        bool withPhoto = true,
+        bool withGroups = false,
+        bool withAccounts = true,
+        bool includeUnifiedId = false,
   }) async {
     final contacts = await _selectAdvanced(
       id: rawContactId,
@@ -198,6 +206,7 @@ class FlutterContacts {
       sorted: false,
       deduplicateProperties: false,
       idIsRawContactId: true,
+      returnUnifiedContacts: includeUnifiedId,
     );
     return contacts.singleOrNull;
   }
@@ -421,6 +430,8 @@ class FlutterContacts {
 
     contacts.forEach((c) => c
       ..propertiesFetched = true
+      ..photoFetched = true
+      ..thumbnailFetched = true
       ..isUnified = false);
     return contacts;
   }
