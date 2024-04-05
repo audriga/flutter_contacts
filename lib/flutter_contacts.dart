@@ -30,8 +30,8 @@ class FlutterContacts {
   // ignore: cancel_subscriptions
   static StreamSubscription? _eventSubscription;
   static final _eventSubscribers = <void Function()>[];
-  static final _alpha = RegExp(r'\p{Letter}', unicode: true);
-  static final _numeric = RegExp(r'\p{Number}', unicode: true);
+  static final _alpha = RegExp(r'\p{Alpha}', unicode: true);
+  static final _numeric = RegExp(r'\d', unicode: true);
   static const String _KeyAccount = 'account_map';
   static const String _KeyRawContactIds = 'raw_contact_ids';
   static const String _KeyRawContactId = 'raw_contact_id';
