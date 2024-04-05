@@ -338,7 +338,20 @@ class FlutterContacts {
     } else {
       await _channel.invokeMethod('deleteRaw', ids);
     }
+  }
 
+  /// Deletes raw contacts matching the given raw_contact_ids the database.
+  /// Android only.
+  static Future<void> deleteRawContactsByRawContactIds(List<String> ids) async {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    if (ids.any((x) => x.isEmpty)) {
+      throw Exception('Cannot delete contacts without IDs');
+    }
+    if (config.behaveAsSyncAdapter) {
+      await _channel.invokeMethod('deleteRawSync', ids);
+    } else {
+      await _channel.invokeMethod('deleteRaw', ids);
+    }
   }
 
   /// Deletes one contact from the database.
