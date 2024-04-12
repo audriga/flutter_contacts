@@ -38,6 +38,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
         private var insertResult: Result? = null
 
         private const val ACCOUNT_PARAMETER = "account_map"
+//        private const val CONTACT_PARAMETER = "contact_map"
         private const val RAW_CONTACT_IDS_PARAMETER = "raw_contact_ids"
         private const val RAW_CONTACT_ID_PARAMETER = "raw_contact_id"
         private const val ID_PARAMETER = "id"
@@ -301,7 +302,7 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                     }
                 }
             /**
-             * Query the contents of custom data rows.
+             * Insert a single custom data row.
              * See also doc of [FlutterContacts.insertCustomDataRow].
              */
             "insertCustomDataRow" ->
@@ -325,6 +326,57 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                         coroutineScope.launch(Dispatchers.Main) { result.error("", "One of the required parameters was null", "") }
                     }
                     
+                }
+
+            /**
+             * Updates custom data rows.
+             * See also doc of [FlutterContacts.updateCustomDataRows].
+             */
+            "updateCustomDataRows" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val rawContactId = call.argument<String>(RAW_CONTACT_ID_PARAMETER)
+                    val mimeType = call.argument<String>(MIMETYPE_PARAMETER)
+                    val rowContentMap = call.argument<HashMap<String, Any>?>(ROW_CONTENT_MAP_PARAMETER)
+                    val callerIsSyncAdapter = call.argument<Boolean>(CALLER_IS_SYNCADAPTER_PARAMETER)
+
+
+                    if (rawContactId != null && mimeType != null && rowContentMap != null) {
+                        FlutterContacts.updateCustomDataRows(
+                            resolver = resolver!!,
+                            rawContactId = rawContactId,
+                            mimeType = mimeType,
+                            rowContentMap = rowContentMap,
+                            callerIsSyncAdapter = callerIsSyncAdapter ?: false,
+                            )
+                        coroutineScope.launch(Dispatchers.Main) { result.success(null) }
+                    } else {
+                        coroutineScope.launch(Dispatchers.Main) { result.error("", "One of the required parameters was null", "") }
+                    }
+
+                }
+            /**
+             * Deletes all custom data rows of a given raw_contact_id+mimetype combination
+             * See also doc of [FlutterContacts.deleteCustomDataRows].
+             */
+            "deleteCustomDataRows" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val rawContactId = call.argument<String>(RAW_CONTACT_ID_PARAMETER)
+                    val mimeType = call.argument<String>(MIMETYPE_PARAMETER)
+                    val callerIsSyncAdapter = call.argument<Boolean>(CALLER_IS_SYNCADAPTER_PARAMETER)
+
+
+                    if (rawContactId != null && mimeType != null) {
+                        FlutterContacts.deleteCustomDataRows(
+                            resolver = resolver!!,
+                            rawContactId = rawContactId,
+                            mimeType = mimeType,
+                            callerIsSyncAdapter = callerIsSyncAdapter ?: false,
+                            )
+                        coroutineScope.launch(Dispatchers.Main) { result.success(null) }
+                    } else {
+                        coroutineScope.launch(Dispatchers.Main) { result.error("", "One of the required parameters was null", "") }
+                    }
+
                 }
             // Gets all "soft deleted" contacts for a given account
             "queryDeleted" ->
@@ -378,6 +430,32 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                         }
                     }
                 }
+
+//            // Will not implement this for now. Someone might want to set multiple custom rows and would then have to fall back to individually inserting them anyways
+//            // To map the reality what i could have multiple rows for the same mimetype i would either need two syncronized lists of mimetype and data
+//            // Or a List<Map<String, Map<String, dynamic>>> (key mimetype, value data-map)
+//            // Inserts a new contact and return it.
+//            // Additionally allows to set one custom data row
+//            "insertAdvanced" ->
+//                coroutineScope.launch(Dispatchers.IO) {
+//                    val contact = call.argument<HashMap<String, Any?>>(CONTACT_PARAMETER)
+//                    val mimeType = call.argument<String>(MIMETYPE_PARAMETER)
+//                    val rowContentMap = call.argument<HashMap<String, Any>?>(ROW_CONTENT_MAP_PARAMETER)
+//                    val callerIsSyncAdapter = call.argument<Boolean>(CALLER_IS_SYNCADAPTER_PARAMETER) ?: false
+//                    val insertedContact: Map<String, Any?>? =
+//                        FlutterContacts.insert(
+//                            resolver = resolver!!,
+//                            contactMap = contact!!,
+//                            callerIsSyncAdapter = callerIsSyncAdapter,
+//                            )
+//                    coroutineScope.launch(Dispatchers.Main) {
+//                        if (insertedContact != null) {
+//                            result.success(insertedContact)
+//                        } else {
+//                            result.error("", "failed to create contact", "")
+//                        }
+//                    }
+//                }
             // Updates an existing contact and returns it.
             "update" ->
                 coroutineScope.launch(Dispatchers.IO) {

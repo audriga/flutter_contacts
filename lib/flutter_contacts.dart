@@ -490,6 +490,52 @@ class FlutterContacts {
       },
     );
   }
+  
+  /// Updates custom data rows in the Contacts Data Table. Android only.
+  /// For the same raw_contact + mimeType combination there might be multiple matching data rows,
+  /// this will delete all of them and replace them with your new data raw.
+  /// [rawContactId] the raw_contact_id of your contact. Not to be confused with the contact_id.
+  /// [mimeType] The mimeType of your custom data rows.
+  /// [rowContentMap] is the actual data to insert. Keys denote the column, and must come from  [ContactsContract.DataColumns](https://android.googlesource.com/platform/frameworks/base/+/HEAD/core/java/android/provider/ContactsContract.java#4305)
+  /// and values are the data you want to set the cell to.
+  /// [behaveAsSyncAdapter] optionally override [FlutterContactsConfig.behaveAsSyncAdapter]
+  static Future<void> updateCustomDataRows({
+    required String rawContactId,
+    required String mimeType,
+    required Map<String, dynamic> rowContentMap,
+    bool? behaveAsSyncAdapter
+  }) {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    return _channel.invokeMethod<void>(
+      'updateCustomDataRows',
+      {
+        _KeyRawContactId: rawContactId,
+        _KeyMimetype: mimeType,
+        _KeyRowContentMap: rowContentMap,
+        _KeyCallerIsSyncadapter: behaveAsSyncAdapter ?? config.behaveAsSyncAdapter,
+      },
+    );
+  }
+  
+  /// Deletes cutom data rows in the Contacts Data Table. Android only.
+  /// [rawContactId] the raw_contact_id of your contact. Not to be confused with the contact_id.
+  /// [mimeType] The mimeType of the custom data rows to be deleted. Note that this will delete all matching rows
+  /// [behaveAsSyncAdapter] optionally override [FlutterContactsConfig.behaveAsSyncAdapter]
+  static Future<void> deleteCustomDataRows({
+    required String rawContactId,
+    required String mimeType,
+    bool? behaveAsSyncAdapter
+  }) {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    return _channel.invokeMethod<void>(
+      'deleteCustomDataRows',
+      {
+        _KeyRawContactId: rawContactId,
+        _KeyMimetype: mimeType,
+        _KeyCallerIsSyncadapter: behaveAsSyncAdapter ?? config.behaveAsSyncAdapter,
+      },
+    );
+  }
 
   /// Listens to contact database changes.
   ///

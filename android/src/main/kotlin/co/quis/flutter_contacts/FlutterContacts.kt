@@ -582,7 +582,8 @@ class FlutterContacts {
         fun insert(
             resolver: ContentResolver,
             contactMap: Map<String, Any?>,
-            callerIsSyncAdapter: Boolean = false
+            callerIsSyncAdapter: Boolean = false,
+
         ): Map<String, Any?>? {
             val ops = mutableListOf<ContentProviderOperation>()
 
@@ -915,13 +916,92 @@ class FlutterContacts {
 
             val insertOperationBuilder: ContentProviderOperation.Builder = newInsert()
                 .withValue(Data.MIMETYPE, mimeType)
+            val contentValues = ContentValues()
             rowContentMap.forEach { (rowName, value) ->
-                insertOperationBuilder.withValue(
-                    rowName,
-                    value
-                )
+                contentValues.putAny(rowName, value)
             }
+            insertOperationBuilder.withValues(contentValues)
+
             ops.add(insertOperationBuilder.build())
+
+            // Save.
+            val addContactResults =
+                resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
+            val rawId: Long = ContentUris.parseId(addContactResults[0].uri!!)
+        }
+
+        /**
+         * Updates custom data rows in the Contacts Data Table.
+         * It does sp by deleting all matching rows and inserting the given data as a new row
+         *
+         * @param resolver Needed to access the content model.
+         * @param mimeType The mimeType of the custom data rows to update.
+         * @param rawContactId the raw_contact_id of your contact. Not to be confused with the contact_id.
+         * @param rowContentMap is the actual data to insert. Keys denote the column, and must come from [ContactsContract.DataColumns]
+         * values are the data you want to set the cell to
+         * Common properties like display_name contact_id are automatically set by the android system
+         */
+        fun updateCustomDataRows(
+            resolver: ContentResolver,
+            rawContactId: String,
+            mimeType: String,
+            rowContentMap: Map<String, Any?>,
+            callerIsSyncAdapter: Boolean = false,
+        ) {
+            fun newDelete(): ContentProviderOperation.Builder = ContentProviderOperation
+                .newDelete(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
+                .withValue(Data.RAW_CONTACT_ID, rawContactId)
+
+            val ops = mutableListOf<ContentProviderOperation>()
+
+            val deleteOperationBuilder: ContentProviderOperation.Builder = newDelete()
+                .withValue(Data.MIMETYPE, mimeType)
+
+            ops.add(deleteOperationBuilder.build())
+
+            fun newInsert(): ContentProviderOperation.Builder = ContentProviderOperation
+                .newInsert(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
+                .withValue(Data.RAW_CONTACT_ID, rawContactId)
+
+            val insertOperationBuilder: ContentProviderOperation.Builder = newInsert()
+                .withValue(Data.MIMETYPE, mimeType)
+            val contentValues = ContentValues()
+            rowContentMap.forEach { (rowName, value) ->
+                contentValues.putAny(rowName, value)
+            }
+            insertOperationBuilder.withValues(contentValues)
+
+            ops.add(insertOperationBuilder.build())
+
+            // Save.
+            val addContactResults =
+                resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
+            val rawId: Long = ContentUris.parseId(addContactResults[0].uri!!)
+        }
+
+        /**
+         * Deletes custom data rows in the Contacts Data Table.
+         *
+         * @param resolver Needed to access the content model.
+         * @param mimeType The mimeType of the custom data rows to delete.
+         * @param rawContactId the raw_contact_id of your contact. Not to be confused with the contact_id.
+         */
+        fun deleteCustomDataRows(
+            resolver: ContentResolver,
+            rawContactId: String,
+            mimeType: String,
+            callerIsSyncAdapter: Boolean = false,
+        ) {
+            fun newDelete(): ContentProviderOperation.Builder = ContentProviderOperation
+                .newDelete(Data.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter))
+                .withValue(Data.RAW_CONTACT_ID, rawContactId)
+
+            val ops = mutableListOf<ContentProviderOperation>()
+
+            val deleteOperationBuilder: ContentProviderOperation.Builder = newDelete()
+                .withValue(Data.MIMETYPE, mimeType)
+
+            ops.add(deleteOperationBuilder.build())
 
             // Save.
             val addContactResults =
@@ -1595,4 +1675,18 @@ class FlutterContacts {
             }
         }
     }
+}
+
+private fun ContentValues.putAny(key: String, value: Any?) = when (value) {
+    null -> { putNull(key) }
+    is String -> { put(key, value as String?) }
+    is Byte -> { put(key, value as Byte?) }
+    is Short -> { put(key, value as Short?) }
+    is Int -> { put(key, value as Int?) }
+    is Long -> { put(key, value as Long?) }
+    is Float -> { put(key, value as Float?) }
+    is Double -> { put(key, value as Double?) }
+    is Boolean -> { put(key, value as Boolean?) }
+    is ByteArray -> { put(key, value as ByteArray?) }
+    else -> { throw IllegalArgumentException("Unsupported type " + value.javaClass) }
 }
