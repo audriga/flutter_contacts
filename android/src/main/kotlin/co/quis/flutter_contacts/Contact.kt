@@ -13,7 +13,7 @@ import co.quis.flutter_contacts.properties.SocialMedia
 import co.quis.flutter_contacts.properties.Website
 
 data class Contact(
-    var id: String,
+    var id: String, // todo: Refactor so that raw contacts will have both contact_id and raw_contact_id
     var displayName: String,
     var thumbnail: ByteArray? = null,
     var photo: ByteArray? = null,

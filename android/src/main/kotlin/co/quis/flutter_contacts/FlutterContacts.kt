@@ -626,9 +626,10 @@ class FlutterContacts {
                 buildOpsForPhoto(resolver, contact.photo!!, ops, rawId, callerIsSyncAdapter = callerIsSyncAdapter)
             }
 
-            // Update starred status.
+            // Update starred status and source_id.
             val contentValues = ContentValues()
             contentValues.put(RawContacts.STARRED, if (contact.isStarred) 1 else 0)
+            contentValues.putAny(RawContacts.SOURCE_ID, contact.sourceId)
             resolver.update(
                 /* uri = */ RawContacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter),
                 /* values = */ contentValues,
@@ -636,8 +637,7 @@ class FlutterContacts {
                 /*selectionArgs=*/arrayOf(rawId.toString())
             )
 
-            // Load contacts with that raw ID, which will give us the full contact as it
-            // was saved.
+            // Load corresponding unified contact
             val insertedContacts: List<Map<String, Any?>> = select(
                 resolver,
                 rawId.toString(),
@@ -657,6 +657,7 @@ class FlutterContacts {
             return insertedContacts[0]
         }
 
+        @Deprecated("This deletes all corresponding raw contacts and only reinserts the first. Do not use!")
         fun update(
             resolver: ContentResolver,
             contactMap: Map<String, Any?>,
@@ -720,7 +721,7 @@ class FlutterContacts {
                 )
             }
 
-            buildOpsForContact(contact, ops, rawContactId) //todo this is the rawId of the first contact
+            buildOpsForContact(contact, ops, rawContactId) // this is the rawId of the first contact
             if (contact.photo != null) {
                 buildOpsForPhoto(resolver, contact.photo!!, ops, rawContactId!!.toLong())
             }
@@ -849,18 +850,16 @@ class FlutterContacts {
             // Save.
             resolver.applyBatch(ContactsContract.AUTHORITY, ArrayList(ops))
 
-            // Update starred status. 
-            // can only set starred status in the table of unified contacts (Contacts)
-            // todo: Refactor so that raw contacts will have both contact_id and raw_contact_id
-            //   and create a new update starred method that updates the starred status and doesn't touch anything else.
-//            val contentValues = ContentValues()
-//            contentValues.put(Contacts.STARRED, if (contact.isStarred) 1 else 0)
-//            resolver.update(
-//                Contacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter),
-//                contentValues,
-//                Data.RAW_CONTACT_ID + "=?",
-//                /*selectionArgs=*/arrayOf(rawContactId)
-//            )
+            // Update starred status and source_id.
+            val contentValues = ContentValues()
+            contentValues.put(RawContacts.STARRED, if (contact.isStarred) 1 else 0)
+            contentValues.putAny(RawContacts.SOURCE_ID, contact.sourceId)
+            resolver.update(
+                /* uri = */ RawContacts.CONTENT_URI.asSyncAdapter(callerIsSyncAdapter),
+                /* values = */ contentValues,
+                /* where = */ RawContacts._ID + "=?",
+                /*selectionArgs=*/arrayOf(rawContactId)
+            )
 
             // Load contacts with that raw ID, which will give us the full contact as it
             // was saved.
@@ -1635,7 +1634,7 @@ class FlutterContacts {
                 )
             }
             for (note in contact.notes) {
-                if (!note.note.isEmpty()) {
+                if (note.note.isNotEmpty()) {
                     ops.add(
                         newInsert()
                             .withValue(Data.MIMETYPE, Note.CONTENT_ITEM_TYPE)
