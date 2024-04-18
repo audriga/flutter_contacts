@@ -27,6 +27,7 @@ import android.provider.ContactsContract.CommonDataKinds.StructuredPostal
 import android.provider.ContactsContract.CommonDataKinds.Website
 import android.provider.ContactsContract.Contacts
 import android.provider.ContactsContract.Data
+import android.provider.ContactsContract.DeletedContacts
 import android.provider.ContactsContract.Groups
 import android.provider.ContactsContract.RawContacts
 import co.quis.flutter_contacts.properties.Account
@@ -445,11 +446,40 @@ class FlutterContacts {
                     .appendQueryParameter(RawContacts.ACCOUNT_NAME, account.name)
                     .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
             }
+
+            var contactIdToTimeStamp = hashMapOf<Int, Int>()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                resolver.query(
+                    /* uri = */ DeletedContacts.CONTENT_URI,
+                    /* projection = */ null,
+                    /* selection = */ null,
+                    /* selectionArgs = */ null,
+                    /* sortOrder = */ null
+                )?.use { cursor ->
+//                while (cursor.moveToNext())
+//                    contacts +=  AndroidContactFactory<T1>.fromProvider(this, cursor.toContentValues())
+
+                    fun getInt(col: String): Int = cursor.getInt(cursor.getColumnIndex(col))
+
+                    while (cursor.moveToNext()) {
+                        val contactId = getInt("contact_id") // DeletedContactsColumns.CONTACT_ID
+                        val contactDeletedTimestamp = getInt("contact_deleted_timestamp") // DeletedContactsColumns.CONTACT_DELETED_TIMESTAMP
+
+                        contactIdToTimeStamp[contactId] = contactDeletedTimestamp;
+                    }
+
+                    cursor.close()
+                }
+            }
+
             resolver.query(
-                uriWithQueryParameters
-//
-                .build(), null,
-                RawContacts.DELETED, null, null)?.use { cursor ->
+                /* uri = */ uriWithQueryParameters.build(),
+                /* projection = */ null,
+                /* selection = */ RawContacts.DELETED,
+                /* selectionArgs = */ null,
+                /* sortOrder = */ null
+            )?.use { cursor ->
 //                while (cursor.moveToNext())
 //                    contacts +=  AndroidContactFactory<T1>.fromProvider(this, cursor.toContentValues())
 
@@ -463,18 +493,24 @@ class FlutterContacts {
 
                 while (cursor.moveToNext()) {
                     // ID and display name.
-                    val id = getString(RawContacts._ID)
+                    val rawContactId = getString(RawContacts._ID)
+                    val contactId = getInt(RawContacts.CONTACT_ID)
+
                     val accountOfContact = Account(
-                        rawId=id,
+                        rawId=rawContactId,
                         name=getString(RawContacts.ACCOUNT_NAME),
                         type = getString(RawContacts.ACCOUNT_TYPE)
                     )
+                    val deletedTimestamp = contactIdToTimeStamp[getInt(RawContacts.CONTACT_ID)];
                     val contact = Contact(
-                        id=id,
+                        id=rawContactId, // todo This is a raw contact, but we need both contactId and rawContactId for later.
+                                      //  However the current semantic is that rawContacts have rawContactId in both places
+                                      //  once I refactored the Contact class, this temporary workaround can be removed
                         displayName=getString(RawContacts.DISPLAY_NAME_PRIMARY),
                         isStarred = getBool(RawContacts.STARRED),
                         accounts = listOf(accountOfContact),
-                        sourceId = getString(RawContacts.SOURCE_ID)
+                        sourceId = getString(RawContacts.SOURCE_ID),
+                        contactLastUpdatedTimestamp = deletedTimestamp
                     )
                     // todo get deleted timestamp somehow
 //                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
@@ -485,8 +521,6 @@ class FlutterContacts {
                 }
 
                 cursor.close()
-
-
             }
             return contacts.map { it.toMap() }
         }
