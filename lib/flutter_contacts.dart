@@ -414,6 +414,15 @@ class FlutterContacts {
     return contacts;
   }
 
+  // debug method.
+  static Future<Map<Object?, Object?>> queryContactLevelDeletedMap({
+    Account? account
+  }) async {
+    if (!Platform.isAndroid) throw Exception('Raw Contact operations only possible on Android');
+    var ret = await _channel.invokeMethod('queryContactLevelDeletedMap');
+    return ret;
+  }
+
   /// Lists contacts that have been marked as dirty.
   /// If [account] is given restricts search to contacts of that account
   static Future<List<Contact>> getDirtyContacts({

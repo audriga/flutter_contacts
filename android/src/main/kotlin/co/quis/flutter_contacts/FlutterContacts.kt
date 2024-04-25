@@ -447,31 +447,8 @@ class FlutterContacts {
                     .appendQueryParameter(RawContacts.ACCOUNT_TYPE, account.type)
             }
 
-            var contactIdToTimeStamp = hashMapOf<Int, Int>()
+            val contactIdToTimeStamp = queryContactLevelDeletedMap(resolver)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-                resolver.query(
-                    /* uri = */ DeletedContacts.CONTENT_URI,
-                    /* projection = */ null,
-                    /* selection = */ null,
-                    /* selectionArgs = */ null,
-                    /* sortOrder = */ null
-                )?.use { cursor ->
-//                while (cursor.moveToNext())
-//                    contacts +=  AndroidContactFactory<T1>.fromProvider(this, cursor.toContentValues())
-
-                    fun getInt(col: String): Int = cursor.getInt(cursor.getColumnIndex(col))
-
-                    while (cursor.moveToNext()) {
-                        val contactId = getInt("contact_id") // DeletedContactsColumns.CONTACT_ID
-                        val contactDeletedTimestamp = getInt("contact_deleted_timestamp") // DeletedContactsColumns.CONTACT_DELETED_TIMESTAMP
-
-                        contactIdToTimeStamp[contactId] = contactDeletedTimestamp;
-                    }
-
-                    cursor.close()
-                }
-            }
 
             resolver.query(
                 /* uri = */ uriWithQueryParameters.build(),
@@ -501,7 +478,7 @@ class FlutterContacts {
                         name=getString(RawContacts.ACCOUNT_NAME),
                         type = getString(RawContacts.ACCOUNT_TYPE)
                     )
-                    val deletedTimestamp = contactIdToTimeStamp[getInt(RawContacts.CONTACT_ID)];
+//                    val deletedTimestamp = contactIdToTimeStamp[getInt(RawContacts.CONTACT_ID)];// todo find timestamp mapping
                     val contact = Contact(
                         id=rawContactId, // todo This is a raw contact, but we need both contactId and rawContactId for later.
                                       //  However the current semantic is that rawContacts have rawContactId in both places
@@ -510,12 +487,8 @@ class FlutterContacts {
                         isStarred = getBool(RawContacts.STARRED),
                         accounts = listOf(accountOfContact),
                         sourceId = getString(RawContacts.SOURCE_ID),
-                        contactLastUpdatedTimestamp = deletedTimestamp
+//                        contactLastUpdatedTimestamp = deletedTimestamp
                     )
-                    // todo get deleted timestamp somehow
-//                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-//                        contact.contactLastUpdatedTimestamp = getInt(CONTACT_DELETED_TIMESTAMP)
-//                    }
 
                     contacts.add(contact)
                 }
@@ -523,6 +496,36 @@ class FlutterContacts {
                 cursor.close()
             }
             return contacts.map { it.toMap() }
+        }
+
+        fun queryContactLevelDeletedMap(resolver: ContentResolver): Map<Int, Int> {
+            val contactIdToTimeStamp = hashMapOf<Int, Int>()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                resolver.query(
+                    /* uri = */ DeletedContacts.CONTENT_URI,
+                    /* projection = */ null,
+                    /* selection = */ null,
+                    /* selectionArgs = */ null,
+                    /* sortOrder = */ null
+                )?.use { cursor ->
+        //                while (cursor.moveToNext())
+        //                    contacts +=  AndroidContactFactory<T1>.fromProvider(this, cursor.toContentValues())
+
+                    fun getInt(col: String): Int = cursor.getInt(cursor.getColumnIndex(col))
+
+                    while (cursor.moveToNext()) {
+                        val contactId = getInt("contact_id") // DeletedContactsColumns.CONTACT_ID
+                        val contactDeletedTimestamp =
+                            getInt("contact_deleted_timestamp") // DeletedContactsColumns.CONTACT_DELETED_TIMESTAMP
+
+                        contactIdToTimeStamp[contactId] = contactDeletedTimestamp;
+                    }
+
+                    cursor.close()
+                }
+            }
+            return contactIdToTimeStamp
         }
 
         /**

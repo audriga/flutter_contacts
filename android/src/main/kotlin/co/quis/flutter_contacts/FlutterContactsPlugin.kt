@@ -389,6 +389,15 @@ class FlutterContactsPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Str
                         )
                     coroutineScope.launch(Dispatchers.Main) { result.success(contacts) }
                 }
+            // Gets all "soft deleted" contacts for a given account
+            "queryContactLevelDeletedMap" ->
+                coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
+                    val deletedMap: Map<Int, Int> =
+                        FlutterContacts.queryContactLevelDeletedMap(
+                            resolver!!
+                        )
+                    coroutineScope.launch(Dispatchers.Main) { result.success(deletedMap) }
+                }
             // Gets all contacts marked dirty for a given account
             "queryDirty" ->
                 coroutineScope.launch(Dispatchers.IO) { // runs in a background thread
