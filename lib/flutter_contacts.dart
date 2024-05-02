@@ -436,7 +436,8 @@ class FlutterContacts {
     return contacts;
   }
 
-  ///
+  /// Clears dirty flag in all provided contacts.
+  /// [rawContactIds] the raw_contact_id of the contacts to clear.
   static Future<int> clearDirtyContacts({
     required List<String> rawContactIds,
   }) async {
@@ -446,7 +447,14 @@ class FlutterContacts {
     );
     return linesChanged;
   }
-
+  /// Query the contents of custom data rows from the Contacts Data Table. Android only.
+  /// [rawContactId] the raw_contact_id of your contact. Not to be confused with the contact_id.
+  /// [mimeType] The mimeType of your custom data rows.
+  /// [projection] A list of which columns to return. Passing null will return all columns,
+  /// which is inefficient (but should be fine since we're only accessing one row anyways).
+  /// returns A list of maps representing the data rows matching mimeType and raw_contact_id.
+  /// Every map in the list represents one data row.
+  /// Every map has column names as keys and the corresponding cell values as values.
   static Future<List<Map<String, dynamic>>> queryCustomDataRows({
     required String rawContactId,
     required String mimeType,
