@@ -119,4 +119,39 @@ These are things we haven't fixed (yet)
   ```dart
   FlutterContacts.config.returnUnifiedContacts = false;
   ```
-  
+
+### Todos
+
+- [x] CRUD for Raw Contacts
+- [ ] Change `Contact` class to more accurately reflect the unified to raw contact relationship (\*)
+  - [ ] Would need to first look into iOS side of things to not make things more complicated down the line
+- [x] Get contacts of a specified account
+- [x] Get Dirty/ Get Deleted Contacts
+- [x] Fix wrong documentation
+- [x] Custom data rows
+  - [x] Insert
+  - [x] Query
+  - [x] Delete
+  - [x] Update [Convenience]
+- [ ] Create contact with custom data in one call [Convenience/ Performance]
+  - [ ] Create "advanced insert" function for this
+- [x] read source_id and lastUpdatedTime
+- [x] write source_id
+- [x] behaveAsSyncAdapter
+- [x] Fix "contact-not-showing-up" bug
+- [ ] Look into what they do with groups and photos and if that needs any fixing
+- [x] **Automated Testing** especially for the newly added functions
+- [ ] Support for partial updates (either by some sort of diff input or by checking against what is stored instead of delete+insert) [Convenience?/ Performance?] 
+- [x] Also publish contacts_and_accounts_demo app as an example app of the new features
+
+---
+
+Code todos :
+
+- [ ] Get deleted timestamp: work in progress
+- [ ] Make old dangerous update method unavailable/ depreacated on android
+- [ ] Groups are only deleted when withGroups flag is true. However groups are always inserted, irregardless of that flag.
+- [ ] Photo is  deleted and reinserted the photo on every update (even if photo is not changed) Is there a better way for this?
+- [ ] Refactor so that raw contacts will have both contact_id and raw_contact_id and create a new update starred method that updates the starred status and doesn't touch anything else. (See (\*))
+- [ ] In `buildOpsForContact` (used for insert and update): If I am seeing this correctly contact_id is not set. Could this lead to the updated contact becoming "decoupled" from the unified contact?
+  I could set this to contact.id, but first I have to make sure that contact.id is always a contact_id, and not a raw_contact_id.
