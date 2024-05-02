@@ -1,106 +1,85 @@
 # flutter_contacts
 
-[![pub](https://img.shields.io/pub/v/flutter_contacts?label=version)](https://pub.dev/packages/flutter_contacts)
-[![pub points](https://img.shields.io/pub/points/flutter_contacts)](https://pub.dev/packages/flutter_contacts/score)
-[![popularity](https://img.shields.io/pub/popularity/flutter_contacts)](https://pub.dev/packages/flutter_contacts/score)
-[![likes](https://img.shields.io/pub/likes/flutter_contacts)](https://pub.dev/packages/flutter_contacts/score)
-
 Flutter plugin to read, create, update, delete and observe native contacts on Android and iOS, with group support, vCard support, and contact permission handling.
 
-For a minimalistic example, take a look at [`example/`](https://github.com/QuisApp/flutter_contacts/blob/master/example). You can write a full-fledged contacts app with it – see [`example_full/`](https://github.com/QuisApp/flutter_contacts/blob/master/example_full) to see how.
+For an example app using the added features of this fork see [flutter_contacts_and_accounts_demo](https://github.com/audriga/flutter_contacts_and_accounts_demo/)
 
-## Quick start
+We have not changed the existing examples ( [`example/`](https://github.com/audriga/flutter_contacts/blob/master/example) and [`example_full/`](https://github.com/audriga/flutter_contacts/blob/master/example_full)) much, so we could recommend to use or demo app instead for reference.
 
-```dart
-// See installation notes below regarding AndroidManifest.xml and Info.plist
-import 'package:flutter_contacts/flutter_contacts.dart';
+Our integration tests lie in [flutter_contacts_and_accounts_demo/integration_test](https://github.com/audriga/flutter_contacts_and_accounts_demo/tree/main/integration_test). We recommend taking a look at them, since this shows how you can expect different functions to behave.
 
-// Request contact permission
-if (await FlutterContacts.requestPermission()) {
-  // Get all contacts (lightly fetched)
-  List<Contact> contacts = await FlutterContacts.getContacts();
+## Changes in this Fork
 
-  // Get all contacts (fully fetched)
-  contacts = await FlutterContacts.getContacts(
-      withProperties: true, withPhoto: true);
+We created and fixed some platform-specific functionality for Android specifically when working on raw contacts.
 
-  // Get contact with specific ID (fully fetched)
-  Contact contact = await FlutterContacts.getContact(contacts.first.id);
+### Updated Documentation
 
-  // Insert new contact
-  final newContact = Contact()
-    ..name.first = 'John'
-    ..name.last = 'Smith'
-    ..phones = [Phone('555-123-4567')];
-  await newContact.insert();
+The original library contained confusing Documentation when it came to the concept of raw contacts and ids.
+Specifically it referred to "raw account ids, even though accounts don't have ids in the Android Contact tables, and there is no such thing as a raw account.
 
-  // Update contact
-  contact.name.first = 'Bob';
-  await contact.update();
+We fixed this documentation to more accurately reflect the contents of https://developer.android.com/guide/topics/providers/contacts-provider#RawContactBasics
 
-  // Delete contact
-  await contact.delete();
+In general we took care to add accurate Documentation to all functions so we encourage to read those for the functions you plan to use.
 
-  // Open external contact app to view/edit/pick/insert contacts.
-  await FlutterContacts.openExternalView(contact.id);
-  await FlutterContacts.openExternalEdit(contact.id);
-  final contact = await FlutterContacts.openExternalPick();
-  final contact = await FlutterContacts.openExternalInsert();
+### New CRUD Functions
 
-  // Listen to contact database changes
-  FlutterContacts.addListener(() => print('Contact DB changed'));
+* `updateRawContact`: Updates a raw contact by deleting that raw contacts properties and re-adding them
+  - Intended to replace `updateContact` as that would  **delete all all raw contacts** associated with that unified contact (same contact_id, but arbitrary raw_contact_id)  but **only re-insert the first raw contact** (with the new properties)
+  - This could potentially also lead to the deletion of that contact on a remote service.
+  - So we strongly advice to always use `updateRawContact` and never use `updateContact` on Android.
+* `deleteRawContacts` deletes raw contacts based on a list of `raw_cotnact_ids`
+* `insertContact` actually already inserted raw contacts (and returned the corresponding unified contact). Updated checks and description
 
-  // Create a new group (iOS) / label (Android).
-  await FlutterContacts.insertGroup(Group('', 'Coworkers'));
+### Custom Properties
 
-  // Export contact to vCard
-  String vCard = contact.toVCard();
+* General Properties every contact has:
+  * Read/ write for `source_id` (String that uniquely identifies this row to its source account.)
+  * Read `lastUpdatedTimestamp` (due to Android specific restrictions this can likely not be retrieved for deleted contacts)
 
-  // Import contact from vCard
-  contact = Contact.fromVCard('BEGIN:VCARD\n'
-      'VERSION:3.0\n'
-      'N:;Joe;;;\n'
-      'TEL;TYPE=HOME:123456\n'
-      'END:VCARD');
-}
-```
+#### Custom MIME-types
 
-## Simplified contact model
+In Android, for a given contact in the `contacts` table there will be one or multiple raw contacts in the `raw_contacts` table.
+And for every raw contact in the raw contacts table there will be several properties in the `data` table.
 
-See [code](https://github.com/QuisApp/flutter_contacts/blob/master/lib/contact.dart) for complete data model.
+Every row is one property of a raw contact. The mimetype row determines what kind of property it is (Phone Number, Email Address) and 15 data rows hold the actual data.
 
-```dart
-class Contact {
-    String id;
-    String displayName;
-    Uint8List? photo;
-    Uint8List? thumbnail;
-    Name name;
-    List<Phone> phones;
-    List<Email> emails;
-    List<Address> addresses;
-    List<Organization> organizations;
-    List<Website> websites;
-    List<SocialMedia> socialMedias;
-    List<Event> events;
-    List<Note> notes;
-    List<Group> groups;
-}
-class Name { String first; String last; }
-class Phone { String number; PhoneLabel label; }
-class Email { String address; EmailLabel label; }
-class Address { String address; AddressLabel label; }
-class Organization { String company; String title; }
-class Website { String url; WebsiteLabel label; }
-class SocialMedia { String userName; SocialMediaLabel label; }
-class Event { int? year; int month; int day; EventLabel label; }
-class Note { String note; }
-class Group { String id; String name; }
-```
+We have added `queryCustomDataRows`, `insertCustomDataRow`, `updateCustomDataRows` and `deleteCustomDataRows` functions to manually interact with such data rows.
 
-## Demo
+This can be useful for custom mime-types. Data rows with custom mime-types is how messenger apps such as WhatsApp, Telegram or Signal add the "Message +12345", "Call +123345", etc buttons to your contacts.
 
-![demo](https://user-images.githubusercontent.com/1289004/101141809-ab165c00-35c9-11eb-90ff-b10318b13f16.gif)
+### New Querying Functions
+
+- getRawContacts
+  -  Convenience method that returns raw contacts (ignores value of `config.returnUnifiedContacts`)
+  - Can set account property to restrict results to just raw contacts of that account
+- `getRawContactByRawId` gets a single raw contact
+- `getDeleted` gets "soft deleted" contacts
+- `getDirty` gets raw contacts marked as dirty
+
+### Sync adapter Functionality
+
+Added `config.behaveAsSyncAdapter` option: On Android, whenever you modify a raw contact (note that a unified contact is just a "merged" representation of one or multiple raw contacts, a unified contact does not have properties itself) a `dirty` flag is set, and when you delete a raw contact, the properties in the data table are deleted, but the raw contact in the raw_contacts table remains, and receives the `deleted` flag.
+
+This is so that a sync adapter can then upload these changes to whatever online sync service it provides.
+If you write a sync adapter want to avoid setting those flags (how else could you differentiate between changes you made at sync at changes the user made)
+
+If `config.behaveAsSyncAdapter` is set to true, and you use the rawContact-CRUD methods laid out in "New Functions", these flags will not be set.
+
+Also we provide
+
+* `clearDirtyContacts` which clears the `dirty` flags for all given contacts
+
+### Warnings
+
+These are things we haven't fixed (yet)
+
+* Do not use `updateContact` (see "New Functions" above)
+* `contact.id` will sometimes correspond to `contact_id` and sometimes to `raw_contact_id` depending on the value of `config.returnUnifiedContacts`.
+* `insertContact` will always return the corresponding unified contact, ignoring the value of `config.returnUnifiedContact`
+* The Object model should does not reflect how the different contact tables relate on android. However we wont change this until we verified the inner workings of the iOS side of the plugin.
+  * A unified contact should have a list of contributing raw contacts
+  * A raw contact should have both a `contact_id` and  a `raw_contact_id`, furthermore it should have the mime-types list and exactly one account
+  * An account has only a name and a type (no mime-types and no ids!)
 
 ## Installation
 
@@ -140,13 +119,4 @@ class Group { String id; String name; }
   ```dart
   FlutterContacts.config.returnUnifiedContacts = false;
   ```
-  However, for now, raw contacts cannot be inserted, updated or deleted.
-
-## Feature requests
-
-These features have been requested and will be available soon.
-
-* Read/write custom ringtones [#22](https://github.com/QuisApp/flutter_contacts/issues/22)
-* Block contacts [#28](https://github.com/QuisApp/flutter_contacts/issues/28)
-* Support for contacts stored in SIM card [#26](https://github.com/QuisApp/flutter_contacts/issues/26) [#23](https://github.com/QuisApp/flutter_contacts/issues/23)
-* More raw account information on Android [#5](https://github.com/QuisApp/flutter_contacts/issues/5) [#8](https://github.com/QuisApp/flutter_contacts/issues/8)
+  
