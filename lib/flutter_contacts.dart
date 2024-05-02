@@ -414,7 +414,25 @@ class FlutterContacts {
     return contacts;
   }
 
-  // debug method.
+  // debug method. Directly accesses table utilizing DeletedContacts
+  // This only seems to work on unified contacts, and appears to be mainly there to show which
+  // contact was deleted in the unification process
+  // I.e. ContactA (with contact_id 169) and ContactB (with contact_id 170) are merged to a contact with contact_id 170,
+  // so contact_id 169 appears in the deleted table.
+  // Additionally unclear in which format the timestamps are, as they don't appear to be normal unix timestamps
+  /*
+        var deletedMap = await FlutterContacts.queryContactLevelDeletedMap();
+        The above was to test functionality to also retrieve  the timestamp of when a contact was deleted, by
+        ContactA.id = 169, ContactA...rawId = 159
+        ContactB.id = 170, ContactB...rawId = 160
+
+        deletedMap =  {
+        ... (lower key numbers)
+        169: 368434119,
+        }
+
+
+         */
   static Future<Map<Object?, Object?>> queryContactLevelDeletedMap({
     Account? account
   }) async {
@@ -534,7 +552,7 @@ class FlutterContacts {
     );
   }
   
-  /// Deletes cutom data rows in the Contacts Data Table. Android only.
+  /// Deletes custom data rows in the Contacts Data Table. Android only.
   /// [rawContactId] the raw_contact_id of your contact. Not to be confused with the contact_id.
   /// [mimeType] The mimeType of the custom data rows to be deleted. Note that this will delete all matching rows
   /// [behaveAsSyncAdapter] optionally override [FlutterContactsConfig.behaveAsSyncAdapter]
