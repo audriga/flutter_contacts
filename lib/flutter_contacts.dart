@@ -525,7 +525,7 @@ class FlutterContacts {
     );
   }
   
-  /// Deletes cutom data rows in the Contacts Data Table. Android only.
+  /// Deletes custom data rows in the Contacts Data Table. Android only.
   /// [rawContactId] the raw_contact_id of your contact. Not to be confused with the contact_id.
   /// [mimeType] The mimeType of the custom data rows to be deleted. Note that this will delete all matching rows
   /// [behaveAsSyncAdapter] optionally override [FlutterContactsConfig.behaveAsSyncAdapter]
